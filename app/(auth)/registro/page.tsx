@@ -2,20 +2,21 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Eye, EyeOff, Store, Moon, Sun, Building2, User, Mail, Phone, MapPin, Lock, CheckCircle2 } from "lucide-react"
 import { useTheme } from "next-themes"
+import { useAuth } from "@/lib/auth-context"
+import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 
 type Step = "negocio" | "usuario" | "confirmacion"
 
 export default function RegistroPage() {
-  const router = useRouter()
   const { theme, setTheme } = useTheme()
+  const { register } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -99,11 +100,31 @@ export default function RegistroPage() {
 
   const handleSubmit = async () => {
     setIsLoading(true)
-    // Simular registro
-    setTimeout(() => {
+    setError("")
+
+    try {
+      const success = await register({
+        negocio: {
+          nombre: negocioData.nombre,
+          telefono: negocioData.telefono || undefined,
+          direccion: negocioData.direccion || undefined,
+        },
+        usuario: {
+          nombres: usuarioData.nombre,
+          apellidos: usuarioData.apellidos,
+          correo: usuarioData.correo,
+          contrasena: usuarioData.contrasena,
+        },
+      })
+
+      if (!success) {
+        setError("Error al registrar. Por favor intenta de nuevo.")
+      }
+    } catch {
+      setError("Error al registrar. Por favor intenta de nuevo.")
+    } finally {
       setIsLoading(false)
-      router.push("/login")
-    }, 2000)
+    }
   }
 
   return (
@@ -428,7 +449,14 @@ export default function RegistroPage() {
                 onClick={handleSubmit}
                 disabled={isLoading}
               >
-                {isLoading ? "Registrando..." : "Crear cuenta"}
+                {isLoading ? (
+                  <>
+                    <Spinner className="mr-2 h-4 w-4" />
+                    Registrando...
+                  </>
+                ) : (
+                  "Crear cuenta"
+                )}
               </Button>
             )}
           </div>

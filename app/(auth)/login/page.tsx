@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,9 +9,9 @@ import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Eye, EyeOff, Store, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/lib/auth-context"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function LoginPage() {
-  const router = useRouter()
   const { theme, setTheme } = useTheme()
   const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
@@ -28,24 +27,23 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
-    // Validar campos
+    // Validación
     if (!formData.correo || !formData.contrasena) {
       setError("Por favor complete todos los campos")
       setIsLoading(false)
       return
     }
 
-    // Usar la función login del contexto
-    const result = await login(formData.correo, formData.contrasena)
-    
-    if (!result.success) {
-      setError(result.error || "Error al iniciar sesión")
+    try {
+      const success = await login(formData.correo, formData.contrasena)
+      if (!success) {
+        setError("Correo o contraseña incorrectos")
+      }
+    } catch {
+      setError("Error al iniciar sesión. Intenta de nuevo.")
+    } finally {
       setIsLoading(false)
-      return
     }
-
-    // Si el login es exitoso, el contexto redirige automáticamente
-    // No necesitas hacer router.push("/")
   }
 
   return (
@@ -142,7 +140,14 @@ export default function LoginPage() {
               className="w-full h-12 rounded-xl text-base font-semibold"
               disabled={isLoading}
             >
-              {isLoading ? "Ingresando..." : "Iniciar sesión"}
+              {isLoading ? (
+                <>
+                  <Spinner className="mr-2 h-4 w-4" />
+                  Ingresando...
+                </>
+              ) : (
+                "Iniciar sesión"
+              )}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">

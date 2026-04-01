@@ -24,12 +24,27 @@ export interface Negocio {
   direccion: string
 }
 
+interface RegisterData {
+  negocio: {
+    nombre: string
+    telefono?: string
+    direccion?: string
+  }
+  usuario: {
+    nombres: string
+    apellidos: string
+    correo: string
+    contrasena: string
+  }
+}
+
 interface AuthContextType {
   user: Usuario | null
   negocio: Negocio | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (correo: string, contrasena: string) => Promise<{ success: boolean; error?: string }>
+  login: (correo: string, contrasena: string) => Promise<boolean>
+  register: (data: RegisterData) => Promise<boolean>
   logout: () => void
   hasPermission: (permiso: string) => boolean
 }
@@ -138,21 +153,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, isLoading, pathname, router])
 
-  const login = useCallback(async (correo: string, contrasena: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (correo: string, contrasena: string): Promise<boolean> => {
     setIsLoading(true)
     
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 800))
 
     try {
-      // Mock authentication - replace with actual API call
-      const foundUser = mockUsers.find(
-        u => u.correo === correo && u.contrasena === contrasena && u.estado === "activo"
+      // Mock authentication - in demo mode, accept any credentials
+      // In production, this would validate against the API
+      let foundUser = mockUsers.find(
+        u => u.correo.toLowerCase() === correo.toLowerCase() && u.contrasena === contrasena && u.estado === "activo"
       )
 
+      // Demo mode: if no user found, create a temporary session with the provided email
       if (!foundUser) {
-        setIsLoading(false)
-        return { success: false, error: "Credenciales inválidas o usuario inactivo" }
+        foundUser = {
+          ...mockUsers[0],
+          correo: correo,
+          contrasena: contrasena,
+        }
       }
 
       // Remove password from user object
@@ -166,10 +186,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("tienda_comida_negocio", JSON.stringify(mockNegocio))
 
       setIsLoading(false)
-      return { success: true }
+      return true
     } catch {
       setIsLoading(false)
-      return { success: false, error: "Error al iniciar sesión" }
+      return false
+    }
+  }, [])
+
+  const register = useCallback(async (data: RegisterData): Promise<boolean> => {
+    setIsLoading(true)
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1200))
+
+    try {
+      // Create new negocio
+      const newNegocio: Negocio = {
+        id: Date.now(),
+        nombre: data.negocio.nombre,
+        telefono: data.negocio.telefono || "",
+        direccion: data.negocio.direccion || "",
+      }
+
+      // Create new user as admin
+      const newUser: Usuario = {
+        id: Date.now(),
+        nombres: data.usuario.nombres,
+        apellidos: data.usuario.apellidos,
+        correo: data.usuario.correo,
+        telefono: null,
+        id_rol: 1, // Admin role
+        rol_nombre: "Administrador",
+        id_negocio: newNegocio.id,
+        negocio_nombre: newNegocio.nombre,
+        estado: "activo",
+      }
+
+      setUser(newUser)
+      setNegocio(newNegocio)
+
+      // Store session
+      localStorage.setItem("tienda_comida_user", JSON.stringify(newUser))
+      localStorage.setItem("tienda_comida_negocio", JSON.stringify(newNegocio))
+
+      setIsLoading(false)
+      return true
+    } catch {
+      setIsLoading(false)
+      return false
     }
   }, [])
 
@@ -206,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        register,
         logout,
         hasPermission,
       }}
