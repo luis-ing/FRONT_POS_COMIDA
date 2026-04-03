@@ -1,154 +1,193 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
-  Search,
-  Plus,
-  Phone,
-  MapPin,
-  MoreHorizontal,
-  Edit2,
-  Trash2,
+  Search, Plus, Phone, MapPin, MoreHorizontal, Edit2, Trash2, Loader2,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
 
-const customers = [
-  {
-    id: 1,
-    name: "Juan Pérez",
-    phone: "+52 55 1234 5678",
-    address: "Av. Insurgentes Sur 1234, CDMX",
-    orders: 15,
-    totalSpent: 2450.0,
-  },
-  {
-    id: 2,
-    name: "María García",
-    phone: "+52 55 9876 5432",
-    address: "Calle Roma 567, Col. Roma Norte",
-    orders: 8,
-    totalSpent: 1320.0,
-  },
-  {
-    id: 3,
-    name: "Carlos López",
-    phone: "+52 55 5555 4444",
-    address: "Av. Chapultepec 890, CDMX",
-    orders: 23,
-    totalSpent: 4100.0,
-  },
-  {
-    id: 4,
-    name: "Ana Martínez",
-    phone: "+52 55 3333 2222",
-    address: "Calle Durango 123, Col. Roma",
-    orders: 5,
-    totalSpent: 750.0,
-  },
-  {
-    id: 5,
-    name: "Roberto Sánchez",
-    phone: "+52 55 7777 8888",
-    address: "Av. Reforma 456, CDMX",
-    orders: 12,
-    totalSpent: 1980.0,
-  },
-]
+import { getClientes, createCliente } from "@/services/cliente_service"
+import type { ClienteResponse } from "@/types/schemas"
+
+const getInitials = (name: string) =>
+  name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+
+const EMPTY_FORM = { nombreCompleto: "", celular: "", direccionEntrega: "" }
 
 export function CustomersView() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  // ── Datos ─────────────────────────────────────────────────────────────────
+  const [clientes,  setClientes]  = useState<ClienteResponse[]>([])
+  const [loading,   setLoading]   = useState(true)
 
-  const filteredCustomers = customers.filter(
-    (customer) =>
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone.includes(searchQuery)
+  // ── Filtros / form ────────────────────────────────────────────────────────
+  const [searchQuery,  setSearchQuery]  = useState("")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingClient, setEditingClient] = useState<ClienteResponse | null>(null)
+  const [form,         setForm]         = useState(EMPTY_FORM)
+  const [submitting,   setSubmitting]   = useState(false)
+
+  // ── Carga inicial ─────────────────────────────────────────────────────────
+  const fetchClientes = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await getClientes()
+      setClientes(data)
+    } catch {
+      toast.error("Error al cargar clientes")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchClientes() }, [fetchClientes])
+
+  // ── Búsqueda con debounce por celular (llama al backend) ──────────────────
+  // Si el query parece un número, buscamos en el backend directamente
+  useEffect(() => {
+    const isPhone = /^\d/.test(searchQuery.trim())
+    if (!isPhone || searchQuery.length < 3) return
+
+    const timer = setTimeout(async () => {
+      try {
+        const data = await getClientes(searchQuery.trim())
+        setClientes(data)
+      } catch {
+        toast.error("Error al buscar clientes")
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Si el query se limpia, recargamos todos
+  useEffect(() => {
+    if (searchQuery === "") fetchClientes()
+  }, [searchQuery, fetchClientes])
+
+  // ── Filtrado local por nombre ─────────────────────────────────────────────
+  const filtered = clientes.filter(c =>
+    c.nombreCompleto.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.celular ?? "").includes(searchQuery)
   )
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
+  // ── Abrir diálogo ─────────────────────────────────────────────────────────
+  const openNew = () => {
+    setEditingClient(null)
+    setForm(EMPTY_FORM)
+    setIsDialogOpen(true)
   }
 
+  const openEdit = (c: ClienteResponse) => {
+    setEditingClient(c)
+    setForm({
+      nombreCompleto:   c.nombreCompleto,
+      celular:          c.celular ?? "",
+      direccionEntrega: c.direccionEntrega ?? "",
+    })
+    setIsDialogOpen(true)
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
+    if (!form.nombreCompleto.trim()) {
+      toast.error("El nombre del cliente es requerido")
+      return
+    }
+    setSubmitting(true)
+    try {
+      if (editingClient) {
+        // El backend no expone PATCH /clientes/:id aún — mostrar aviso
+        toast.info("La edición de clientes no está disponible todavía en el backend")
+      } else {
+        const created = await createCliente({
+          nombreCompleto:   form.nombreCompleto,
+          celular:          form.celular || undefined,
+          direccionEntrega: form.direccionEntrega || undefined,
+        })
+        setClientes(prev => [created, ...prev])
+        toast.success("Cliente creado exitosamente")
+      }
+      setIsDialogOpen(false)
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? "Error al guardar el cliente"
+      toast.error(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col p-6">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
-          <p className="text-muted-foreground">
-            Gestiona los clientes registrados en el sistema
-          </p>
+          <p className="text-muted-foreground">Gestiona los clientes registrados en el sistema</p>
         </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="rounded-xl gap-2">
-              <Plus className="h-4 w-4" />
-              Nuevo cliente
+            <Button className="rounded-xl gap-2" onClick={openNew}>
+              <Plus className="h-4 w-4" /> Nuevo cliente
             </Button>
           </DialogTrigger>
           <DialogContent className="rounded-2xl border-2">
             <DialogHeader>
-              <DialogTitle>Agregar nuevo cliente</DialogTitle>
+              <DialogTitle>{editingClient ? "Editar cliente" : "Agregar nuevo cliente"}</DialogTitle>
             </DialogHeader>
-            <form className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nombre completo</Label>
+                <Label>Nombre completo *</Label>
                 <Input
-                  id="name"
                   placeholder="Ej: Juan Pérez"
+                  value={form.nombreCompleto}
+                  onChange={e => setForm(f => ({ ...f, nombreCompleto: e.target.value }))}
                   className="rounded-xl border-2"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono / WhatsApp</Label>
+                <Label>Teléfono / WhatsApp</Label>
                 <Input
-                  id="phone"
                   placeholder="Ej: +52 55 1234 5678"
+                  value={form.celular}
+                  onChange={e => setForm(f => ({ ...f, celular: e.target.value }))}
                   className="rounded-xl border-2"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Dirección de entrega</Label>
+                <Label>Dirección de entrega</Label>
                 <Input
-                  id="address"
                   placeholder="Ej: Av. Insurgentes Sur 1234"
+                  value={form.direccionEntrega}
+                  onChange={e => setForm(f => ({ ...f, direccionEntrega: e.target.value }))}
                   className="rounded-xl border-2"
                 />
               </div>
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-2">
                 <Button
-                  type="button"
                   variant="outline"
                   className="flex-1 rounded-xl border-2"
                   onClick={() => setIsDialogOpen(false)}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1 rounded-xl">
-                  Guardar cliente
+                <Button className="flex-1 rounded-xl" onClick={handleSubmit} disabled={submitting}>
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {editingClient ? "Guardar cambios" : "Guardar cliente"}
                 </Button>
               </div>
-            </form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -158,10 +197,9 @@ export function CustomersView() {
         <div className="relative max-w-md">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            type="text"
             placeholder="Buscar por nombre o teléfono..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             className="h-11 rounded-xl border-2 pl-12"
           />
         </div>
@@ -171,95 +209,94 @@ export function CustomersView() {
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border-2 border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total clientes</p>
+          <p className="text-2xl font-bold text-foreground">{clientes.length}</p>
+        </div>
+        <div className="rounded-2xl border-2 border-border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Con WhatsApp</p>
           <p className="text-2xl font-bold text-foreground">
-            {customers.length}
+            {clientes.filter(c => c.celular).length}
           </p>
         </div>
         <div className="rounded-2xl border-2 border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Órdenes totales</p>
-          <p className="text-2xl font-bold text-foreground">
-            {customers.reduce((sum, c) => sum + c.orders, 0)}
-          </p>
-        </div>
-        <div className="rounded-2xl border-2 border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Ingresos totales</p>
+          <p className="text-sm text-muted-foreground">Con dirección</p>
           <p className="text-2xl font-bold text-primary">
-            ${customers.reduce((sum, c) => sum + c.totalSpent, 0).toFixed(2)}
+            {clientes.filter(c => c.direccionEntrega).length}
           </p>
         </div>
       </div>
 
-      {/* Customers Grid */}
-      <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredCustomers.map((customer) => (
-            <div
-              key={customer.id}
-              className="rounded-2xl border-2 border-border bg-card p-4 transition-all hover:border-primary/30"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 rounded-xl border-2 border-border">
-                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary">
-                      {getInitials(customer.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold text-foreground">
-                      {customer.name}
-                    </h3>
-                    <p className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Phone className="h-3 w-3" />
-                      {customer.phone}
-                    </p>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-lg"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-xl">
-                    <DropdownMenuItem>
-                      <Edit2 className="mr-2 h-4 w-4" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <div className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{customer.address}</span>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between border-t-2 border-border pt-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Órdenes</p>
-                  <p className="font-semibold text-foreground">
-                    {customer.orders}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total gastado</p>
-                  <p className="font-semibold text-primary">
-                    ${customer.totalSpent.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* Grid */}
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filtered.map(cliente => (
+              <div
+                key={cliente.id}
+                className="rounded-2xl border-2 border-border bg-card p-4 transition-all hover:border-primary/30"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12 rounded-xl border-2 border-border">
+                      <AvatarFallback className="rounded-xl bg-primary/10 text-primary">
+                        {getInitials(cliente.nombreCompleto)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{cliente.nombreCompleto}</h3>
+                      {cliente.celular && (
+                        <p className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          {cliente.celular}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-xl">
+                      <DropdownMenuItem onClick={() => openEdit(cliente)}>
+                        <Edit2 className="mr-2 h-4 w-4" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" disabled>
+                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {cliente.direccionEntrega && (
+                  <div className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{cliente.direccionEntrega}</span>
+                  </div>
+                )}
+
+                <div className="mt-4 border-t-2 border-border pt-4">
+                  <p className="text-xs text-muted-foreground">
+                    Registrado: {new Date(cliente.fechaCreacion).toLocaleDateString("es-MX")}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            {filtered.length === 0 && !loading && (
+              <div className="col-span-full flex h-40 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border text-muted-foreground">
+                <p className="font-medium">No se encontraron clientes</p>
+                <p className="text-sm">Intenta con otro término de búsqueda</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -110,7 +110,7 @@ export default function RegistroPage() {
           direccion: negocioData.direccion || undefined,
         },
         usuario: {
-          nombres: usuarioData.nombre,
+          nombre: usuarioData.nombre,
           apellidos: usuarioData.apellidos,
           correo: usuarioData.correo,
           contrasena: usuarioData.contrasena,

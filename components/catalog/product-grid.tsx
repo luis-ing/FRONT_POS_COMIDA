@@ -10,7 +10,7 @@ interface Product {
   id: number
   name: string
   price: number
-  image: string
+  image: string | null
   category: string
 }
 
@@ -44,7 +44,7 @@ export function ProductGrid({
             >
               <div className="relative h-16 w-16 overflow-hidden rounded-xl">
                 <Image
-                  src={product.image}
+                  src={product.image || "/placeholder.svg"}
                   alt={product.name}
                   fill
                   className="object-cover"
@@ -91,7 +91,7 @@ export function ProductGrid({
           >
             <div className="relative aspect-square overflow-hidden">
               <Image
-                src={product.image}
+                src={product.image || "/placeholder.svg"}
                 alt={product.name}
                 fill
                 className="object-cover transition-transform group-hover:scale-105"

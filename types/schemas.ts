@@ -252,7 +252,7 @@ export interface VentaResponse {
   fechaCierre: string | null;
   fechaCreacion: string;
   fechaActualizacion: string;
-  detalles: DetalleVentaResponse[];
+  detalleventa: DetalleVentaResponse[];
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────

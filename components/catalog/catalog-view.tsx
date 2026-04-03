@@ -1,267 +1,357 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Grid3X3, List, SlidersHorizontal, FileText } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Search, Grid3X3, List, SlidersHorizontal, FileText, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
+import { useSearchParams } from "next/navigation"
+
 import { CategoryGrid } from "./category-grid"
 import { ProductGrid } from "./product-grid"
 import { CartPanel } from "./cart-panel"
 import { PaymentModal } from "./payment-modal"
 
-const categories = [
-  { id: 1, name: "Entradas", count: 8, color: "bg-category-yellow" },
-  { id: 2, name: "Sopas", count: 6, color: "bg-category-green" },
-  { id: 3, name: "Ensaladas", count: 5, color: "bg-category-purple" },
-  { id: 4, name: "Desayunos", count: 12, color: "bg-category-blue" },
-  { id: 5, name: "Platillos", count: 15, color: "bg-category-pink" },
-  { id: 6, name: "Extras", count: 11, color: "bg-category-purple" },
-  { id: 7, name: "Postres", count: 6, color: "bg-category-green" },
-  { id: 8, name: "Bebidas", count: 21, color: "bg-category-blue" },
-]
+import { getProductos } from "@/services/producto_service"
+import { getCategorias } from "@/services/categoria_service"
+import { getCanalesVenta } from "@/services/catalogo_service"
+import {
+  crearVentaDirecta,
+  abrirOrden,
+  agregarProductos,
+  enviarACocina,
+  cerrarOrden,
+  getVenta,
+} from "@/services/venta_service"
+import type { ProductoResponse, CategoriaResponse, CanalVentaResponse, VentaResponse } from "@/types/schemas"
 
-const products = [
-  {
-    id: 1,
-    name: "Cerveza clara",
-    price: 65.0,
-    image: "https://images.unsplash.com/photo-1608270586620-248524c67de9?w=200&h=200&fit=crop",
-    category: "Bebidas",
-    requiereCoccion: false,
-  },
-  {
-    id: 2,
-    name: "Avocado Toast con Huevo",
-    price: 100.0,
-    image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=200&h=200&fit=crop",
-    category: "Desayunos",
-    requiereCoccion: true,
-  },
-  {
-    id: 3,
-    name: "Chilaquiles Verdes con Pollo",
-    price: 140.0,
-    image: "https://images.unsplash.com/photo-1534352956036-cd81e27dd615?w=200&h=200&fit=crop",
-    category: "Desayunos",
-    requiereCoccion: true,
-  },
-  {
-    id: 4,
-    name: "Tacos al Pastor",
-    price: 100.0,
-    image: "https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=200&h=200&fit=crop",
-    category: "Platillos",
-    requiereCoccion: true,
-  },
-  {
-    id: 5,
-    name: "Classic Sirloin",
-    price: 220.0,
-    image: "https://images.unsplash.com/photo-1600891964092-4316c288032e?w=200&h=200&fit=crop",
-    category: "Platillos",
-    requiereCoccion: true,
-  },
-  {
-    id: 6,
-    name: "Ensalada César",
-    price: 95.0,
-    image: "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=200&h=200&fit=crop",
-    category: "Ensaladas",
-    requiereCoccion: false,
-  },
-]
+// ─── Tipos locales ────────────────────────────────────────────────────────────
 
 export interface CartItem {
-  id: number
-  name: string
-  price: number
-  quantity: number
-  enviadoACocina: boolean
+  id:              number
+  name:            string
+  price:           number
+  quantity:        number
+  enviadoACocina:  boolean
   requiereCoccion: boolean
 }
 
-// Types for order management
-export type SaleFlow = "flujo1" | "flujo2"
+export type SaleFlow    = "flujo1" | "flujo2"
 export type OrderStatus = "ABIERTA" | "CERRADA"
 
-export interface OpenOrder {
-  id: string
-  items: CartItem[]
-  total: number
-  status: OrderStatus
-  createdAt: Date
-  notes?: string
+// Para el panel de órdenes abiertas en el cart (datos mínimos para el dropdown)
+export interface OpenOrderSummary {
+  id:         number   // id real de la venta en BD
+  label:      string   // ej: "#42"
+  total:      number
+  createdAt:  string   // ISO
 }
 
-export function CatalogView() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [saleFlow, setSaleFlow] = useState<SaleFlow>("flujo1")
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
-  const [openOrders, setOpenOrders] = useState<OpenOrder[]>([])
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null)
+// ─── IDs fijos de catálogo ────────────────────────────────────────────────────
+// Ajusta estos valores si tu BD usa IDs distintos
+const CANAL_MOSTRADOR_NOMBRE = "Mostrador"
 
-  const addToCart = (product: (typeof products)[0]) => {
-    setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id && !item.enviadoACocina)
+// ─── Componente ───────────────────────────────────────────────────────────────
+
+export function CatalogView() {
+  const searchParams = useSearchParams()
+
+  // ── Datos del catálogo ────────────────────────────────────────────────────
+  const [productos,   setProductos]   = useState<ProductoResponse[]>([])
+  const [categorias,  setCategorias]  = useState<CategoriaResponse[]>([])
+  const [canales,     setCanales]     = useState<CanalVentaResponse[]>([])
+  const [loadingData, setLoadingData] = useState(true)
+
+  // ── UI ────────────────────────────────────────────────────────────────────
+  const [searchQuery,  setSearchQuery]  = useState("")
+  const [viewMode,     setViewMode]     = useState<"grid" | "list">("grid")
+  const [saleFlow,     setSaleFlow]     = useState<SaleFlow>("flujo1")
+
+  // ── Carrito ───────────────────────────────────────────────────────────────
+  const [cartItems,      setCartItems]      = useState<CartItem[]>([])
+  const [isPaymentOpen,  setIsPaymentOpen]  = useState(false)
+
+  // ── Orden activa (Flujo 2) ────────────────────────────────────────────────
+  const [currentVenta,  setCurrentVenta]  = useState<VentaResponse | null>(null)
+  const [openOrders,    setOpenOrders]    = useState<OpenOrderSummary[]>([])
+  const [submitting,    setSubmitting]    = useState(false)
+
+  // ── Carga inicial ─────────────────────────────────────────────────────────
+  const fetchCatalog = useCallback(async () => {
+    setLoadingData(true)
+    try {
+      const [prods, cats, cvs] = await Promise.all([
+        getProductos({ activo: true }),
+        getCategorias(),
+        getCanalesVenta(),
+      ])
+      setProductos(prods)
+      setCategorias(cats)
+      setCanales(cvs)
+    } catch {
+      toast.error("Error al cargar el catálogo")
+    } finally {
+      setLoadingData(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchCatalog() }, [fetchCatalog])
+
+  // Si venimos de open-orders-view con ?ordenId=X, cargamos esa orden
+  useEffect(() => {
+    const ordenId = searchParams.get("ordenId")
+    if (!ordenId) return
+    setSaleFlow("flujo2")
+    getVenta(parseInt(ordenId))
+      .then(venta => {
+        setCurrentVenta(venta)
+        // Reconstruimos el carrito desde los detalles de la venta
+        const items: CartItem[] = venta.detalleventa.map(d => ({
+          id:              d.idProducto,
+          name:            d.producto?.nombre ?? `Producto #${d.idProducto}`,
+          price:           Number(d.precioUnitario),
+          quantity:        d.cantidad,
+          enviadoACocina:  d.enviadoACocina,
+          requiereCoccion: d.producto?.requiereCoccion ?? true,
+        }))
+        setCartItems(items)
+        toast.info(`Orden #${venta.id} cargada`)
+      })
+      .catch(() => toast.error("No se pudo cargar la orden"))
+  }, [searchParams])
+
+  // ── Helper: id del canal Mostrador ────────────────────────────────────────
+  const getCanalMostrador = () => {
+    const canal = canales.find(c => c.canal === CANAL_MOSTRADOR_NOMBRE)
+    if (!canal) throw new Error("Canal Mostrador no encontrado en catálogos")
+    return canal.id
+  }
+
+  // ── Agregar al carrito ────────────────────────────────────────────────────
+  const addToCart = (producto: ProductoResponse) => {
+    setCartItems(prev => {
+      const existing = prev.find(i => i.id === producto.id && !i.enviadoACocina)
       if (existing) {
-        return prev.map((item) =>
-          item.id === product.id && !item.enviadoACocina
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+        return prev.map(i =>
+          i.id === producto.id && !i.enviadoACocina
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
         )
       }
-      return [...prev, { 
-        ...product, 
-        quantity: 1, 
-        enviadoACocina: false, 
-        requiereCoccion: product.requiereCoccion 
+      return [...prev, {
+        id:              producto.id,
+        name:            producto.nombre,
+        price:           Number(producto.precio),
+        quantity:        1,
+        enviadoACocina:  false,
+        requiereCoccion: producto.requiereCoccion,
       }]
     })
   }
 
   const updateQuantity = (id: number, quantity: number, enviadoACocina: boolean) => {
-    // No permitir modificar items ya enviados a cocina
     if (enviadoACocina) return
-    
     if (quantity <= 0) {
-      setCartItems((prev) => prev.filter((item) => !(item.id === id && !item.enviadoACocina)))
+      setCartItems(prev => prev.filter(i => !(i.id === id && !i.enviadoACocina)))
     } else {
-      setCartItems((prev) =>
-        prev.map((item) => 
-          (item.id === id && !item.enviadoACocina) 
-            ? { ...item, quantity } 
-            : item
-        )
-      )
+      setCartItems(prev => prev.map(i =>
+        i.id === id && !i.enviadoACocina ? { ...i, quantity } : i
+      ))
     }
   }
 
-  const clearCart = () => {
-    // Solo limpiar items no enviados a cocina
-    setCartItems((prev) => prev.filter(item => item.enviadoACocina))
-  }
+  const clearCart = () => setCartItems(prev => prev.filter(i => i.enviadoACocina))
 
-  const handleSendToKitchen = () => {
-    // Marcar items como enviados a cocina
-    setCartItems((prev) =>
-      prev.map((item) => ({ ...item, enviadoACocina: true }))
-    )
-    // Aquí se emitiría el socket "nueva_orden" o "orden_actualizada"
-  }
+  // ── Helpers de items ──────────────────────────────────────────────────────
+  const pendingItems = cartItems.filter(i => !i.enviadoACocina)
 
-  const handleOpenOrder = () => {
-    // Flujo 2: Abrir orden
-    const newOrderId = `ORD-${Date.now()}`
-    const newOrder: OpenOrder = {
-      id: newOrderId,
-      items: [...cartItems],
-      total: cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-      status: "ABIERTA",
-      createdAt: new Date(),
+  const buildProductosPayload = (items: CartItem[]) =>
+    items.map(i => ({ idProducto: i.id, cantidad: i.quantity }))
+
+  // ── FLUJO 1: Cobro inmediato ──────────────────────────────────────────────
+  // El modal de pago llama a onConfirmPayment con el idMetodoPago elegido.
+  // Aquí hacemos la llamada real al backend.
+  const handleConfirmPaymentFlujo1 = async (idMetodoPago: number) => {
+    setSubmitting(true)
+    try {
+      const idCanalVenta = getCanalMostrador()
+      await crearVentaDirecta({
+        idMetodoPago,
+        idCanalVenta,
+        productos: buildProductosPayload(cartItems),
+      })
+      setCartItems([])
+      toast.success("Venta registrada correctamente")
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? "Error al registrar la venta"
+      toast.error(msg)
+      throw err // Re-lanzamos para que PaymentModal no muestre éxito
+    } finally {
+      setSubmitting(false)
     }
-    setOpenOrders((prev) => [...prev, newOrder])
-    setCurrentOrderId(newOrderId)
-    handleSendToKitchen()
   }
 
-  const handleAddToOpenOrder = () => {
-    if (!currentOrderId) return
-    
-    // Agregar items a la orden abierta actual
-    const pendingItems = cartItems.filter(item => !item.enviadoACocina)
-    
-    setOpenOrders((prev) =>
-      prev.map((order) =>
-        order.id === currentOrderId
-          ? {
-              ...order,
-              items: [...order.items, ...pendingItems.map(i => ({ ...i, enviadoACocina: true }))],
-              total: order.total + pendingItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-            }
-          : order
-      )
-    )
-    
-    handleSendToKitchen()
-  }
+  // ── FLUJO 2: Abrir orden ──────────────────────────────────────────────────
+  const handleOpenOrder = async () => {
+    if (pendingItems.length === 0) return
+    setSubmitting(true)
+    try {
+      const idCanalVenta = getCanalMostrador()
 
-  const handlePayment = () => {
-    setIsPaymentModalOpen(true)
-  }
+      // 1. Abrimos la orden
+      const venta = await abrirOrden({ idCanalVenta })
 
-  const handleConfirmPayment = (methodId: number) => {
-    // Cerrar la orden
-    if (currentOrderId) {
-      setOpenOrders((prev) =>
-        prev.map((order) =>
-          order.id === currentOrderId
-            ? { ...order, status: "CERRADA" as OrderStatus }
-            : order
-        )
-      )
-      setCurrentOrderId(null)
+      // 2. Agregamos los productos
+      await agregarProductos(venta.id, {
+        productos: buildProductosPayload(pendingItems),
+      })
+
+      // 3. Enviamos a cocina los que lo requieran
+      const ventaFinal = await enviarACocina(venta.id)
+
+      setCurrentVenta(ventaFinal)
+
+      // Marcamos como enviados en el carrito
+      setCartItems(prev => prev.map(i => ({ ...i, enviadoACocina: true })))
+
+      // Agregamos al resumen de órdenes abiertas (dropdown)
+      setOpenOrders(prev => [...prev, {
+        id:        ventaFinal.id,
+        label:     `#${ventaFinal.id}`,
+        total:     Number(ventaFinal.total),
+        createdAt: ventaFinal.fechaApertura,
+      }])
+
+      toast.success(`Orden #${ventaFinal.id} abierta y enviada a cocina`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Error al abrir la orden")
+    } finally {
+      setSubmitting(false)
     }
-    
-    // Limpiar carrito
-    setCartItems([])
-    setIsPaymentModalOpen(false)
+  }
+
+  // ── FLUJO 2: Agregar productos a orden abierta ────────────────────────────
+  const handleAddToOpenOrder = async () => {
+    if (!currentVenta || pendingItems.length === 0) return
+    setSubmitting(true)
+    try {
+      // 1. Agregar productos
+      await agregarProductos(currentVenta.id, {
+        productos: buildProductosPayload(pendingItems),
+      })
+
+      // 2. Enviar a cocina
+      const ventaFinal = await enviarACocina(currentVenta.id)
+      setCurrentVenta(ventaFinal)
+
+      setCartItems(prev => prev.map(i => ({ ...i, enviadoACocina: true })))
+
+      // Actualizar total en el dropdown
+      setOpenOrders(prev => prev.map(o =>
+        o.id === ventaFinal.id
+          ? { ...o, total: Number(ventaFinal.total) }
+          : o
+      ))
+
+      toast.success("Productos enviados a cocina")
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Error al agregar productos")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── FLUJO 2: Cerrar y cobrar ──────────────────────────────────────────────
+  const handleConfirmPaymentFlujo2 = async (idMetodoPago: number) => {
+    if (!currentVenta) return
+    setSubmitting(true)
+    try {
+      await cerrarOrden(currentVenta.id, { idMetodoPago })
+      setCartItems([])
+      setCurrentVenta(null)
+      setOpenOrders(prev => prev.filter(o => o.id !== currentVenta.id))
+      toast.success(`Orden #${currentVenta.id} cerrada y cobrada`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Error al cerrar la orden")
+      throw err
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Cargar orden abierta desde dropdown ───────────────────────────────────
+  const handleLoadOrder = async (ventaId: number) => {
+    try {
+      const venta = await getVenta(ventaId)
+      setCurrentVenta(venta)
+      const items: CartItem[] = venta.detalleventa.map(d => ({
+        id:              d.idProducto,
+        name:            d.producto?.nombre ?? `Producto #${d.idProducto}`,
+        price:           Number(d.precioUnitario),
+        quantity:        d.cantidad,
+        enviadoACocina:  d.enviadoACocina,
+        requiereCoccion: d.producto?.requiereCoccion ?? true,
+      }))
+      setCartItems(items)
+      setSaleFlow("flujo2")
+      toast.info(`Orden #${venta.id} cargada`)
+    } catch {
+      toast.error("Error al cargar la orden")
+    }
   }
 
   const handleNewSale = () => {
     setCartItems([])
-    setCurrentOrderId(null)
+    setCurrentVenta(null)
   }
 
-  const handleLoadOrder = (orderId: string) => {
-    const order = openOrders.find(o => o.id === orderId)
-    if (order && order.status === "ABIERTA") {
-      setCartItems(order.items)
-      setCurrentOrderId(orderId)
-      setSaleFlow("flujo2")
+  // ── Dispatch de pago según flujo ──────────────────────────────────────────
+  const handleConfirmPayment = async (idMetodoPago: number) => {
+    if (saleFlow === "flujo1") {
+      await handleConfirmPaymentFlujo1(idMetodoPago)
+    } else {
+      await handleConfirmPaymentFlujo2(idMetodoPago)
     }
   }
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // ── Filtrado ──────────────────────────────────────────────────────────────
+  const filteredProducts = productos.filter(p =>
+    p.nombre.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  )
+  const subtotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
-  const pendingItems = cartItems.filter(item => !item.enviadoACocina)
-  const sentItems = cartItems.filter(item => item.enviadoACocina)
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (loadingData) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full">
-      {/* Main Content */}
-      <div className="flex-1 p-6">
-        {/* Search Bar */}
+      {/* Contenido principal */}
+      <div className="flex-1 overflow-auto p-6">
+        {/* Búsqueda */}
         <div className="mb-6 flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              type="text"
               placeholder="Buscar productos..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="h-12 rounded-xl border-2 pl-12 text-base"
             />
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-12 w-12 rounded-xl border-2"
-          >
+          <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-2">
             <SlidersHorizontal className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Sale Flow Selector + Open Orders Badge */}
+        {/* Selector de flujo */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex rounded-xl border-2 border-border bg-muted/50 p-1">
@@ -269,10 +359,7 @@ export function CatalogView() {
                 variant={saleFlow === "flujo1" ? "default" : "ghost"}
                 size="sm"
                 className="rounded-lg"
-                onClick={() => {
-                  setSaleFlow("flujo1")
-                  handleNewSale()
-                }}
+                onClick={() => { setSaleFlow("flujo1"); handleNewSale() }}
               >
                 Cobro inmediato
               </Button>
@@ -285,19 +372,15 @@ export function CatalogView() {
                 Orden abierta
               </Button>
             </div>
-            
-            {openOrders.filter(o => o.status === "ABIERTA").length > 0 && (
+            {openOrders.length > 0 && (
               <Badge variant="outline" className="rounded-lg border-2 border-primary/50 bg-primary/10 text-primary">
                 <FileText className="mr-1 h-3 w-3" />
-                {openOrders.filter(o => o.status === "ABIERTA").length} órdenes abiertas
+                {openOrders.length} órdenes abiertas
               </Badge>
             )}
           </div>
-        </div>
 
-        {/* Products Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Productos</h2>
+          {/* Vista */}
           <div className="flex items-center gap-2 rounded-xl border-2 border-border p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -318,45 +401,63 @@ export function CatalogView() {
           </div>
         </div>
 
-        {/* Categories */}
-        <CategoryGrid categories={categories} />
+        {/* Categorías */}
+        <CategoryGrid
+          categories={categorias.map(c => ({
+            id:    c.id,
+            name:  c.nombre,
+            count: filteredProducts.filter(p => p.idCategoria === c.id).length,
+            color: c.color ?? "#6b7280",
+          }))}
+        />
 
-        {/* Products */}
+        {/* Productos */}
         <div className="mt-6">
-          <h3 className="mb-4 text-lg font-medium">Favoritos de los clientes</h3>
+          <h3 className="mb-4 text-lg font-medium">Productos</h3>
           <ProductGrid
-            products={filteredProducts}
+            products={filteredProducts.map(p => ({
+              id:              p.id,
+              name:            p.nombre,
+              price:           Number(p.precio),
+              image:           null,
+              category:        p.categoria?.nombre ?? "",
+              requiereCoccion: p.requiereCoccion,
+            }))}
             viewMode={viewMode}
-            onAddToCart={addToCart}
+            onAddToCart={item => {
+              const prod = productos.find(p => p.id === item.id)
+              if (prod) addToCart(prod)
+            }}
             cartItems={cartItems}
           />
         </div>
       </div>
 
-      {/* Cart Panel */}
+      {/* Panel carrito */}
       <CartPanel
         items={cartItems}
         onUpdateQuantity={updateQuantity}
         onClearCart={clearCart}
         saleFlow={saleFlow}
-        currentOrderId={currentOrderId}
-        onPayment={handlePayment}
+        currentOrderId={currentVenta ? currentVenta.id : null}
+        onPayment={() => setIsPaymentOpen(true)}
         onOpenOrder={handleOpenOrder}
         onAddToOpenOrder={handleAddToOpenOrder}
-        onSendToKitchen={handleSendToKitchen}
+        onSendToKitchen={handleAddToOpenOrder}
         onNewSale={handleNewSale}
-        openOrders={openOrders.filter(o => o.status === "ABIERTA")}
+        openOrders={openOrders}
         onLoadOrder={handleLoadOrder}
+        submitting={submitting}
       />
 
-      {/* Payment Modal */}
+      {/* Modal de pago */}
       <PaymentModal
-        open={isPaymentModalOpen}
-        onOpenChange={setIsPaymentModalOpen}
+        open={isPaymentOpen}
+        onOpenChange={setIsPaymentOpen}
         items={cartItems}
         total={subtotal}
         onConfirmPayment={handleConfirmPayment}
-        isClosingOrder={saleFlow === "flujo2" && currentOrderId !== null}
+        isClosingOrder={saleFlow === "flujo2" && currentVenta !== null}
       />
     </div>
   )
