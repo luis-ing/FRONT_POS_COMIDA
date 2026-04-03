@@ -44,7 +44,7 @@ export function ProductGrid({
             >
               <div className="relative h-16 w-16 overflow-hidden rounded-xl">
                 <Image
-                  src={product.image || "/placeholder.svg"}
+                  src={product.image || "/default-store-350x350.jpg"}
                   alt={product.name}
                   fill
                   className="object-cover"

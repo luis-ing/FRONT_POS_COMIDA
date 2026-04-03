@@ -207,7 +207,7 @@ export function KitchenView() {
               <div className="flex-1 p-4">
                 <ul className="space-y-2">
                   {orden.detalleventa
-                    .filter(d => d.producto?.requiereCoccion)
+                    ?.filter(d => d.producto?.requiereCoccion)
                     .map(detalle => (
                       <li key={detalle.id} className="flex items-start gap-2">
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold">

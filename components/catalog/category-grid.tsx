@@ -23,6 +23,7 @@ export function CategoryGrid({ categories }: CategoryGridProps) {
             "group relative flex flex-col items-start justify-between rounded-2xl border-2 border-transparent p-4 text-left transition-all hover:border-primary/20 hover:shadow-md",
             category.color
           )}
+          style={{ borderColor: `${category.color}80`, backgroundColor: `${category.color}20` }} // Agrega un fondo con opacidad
         >
           <span className="text-sm font-semibold text-foreground">
             {category.name}
