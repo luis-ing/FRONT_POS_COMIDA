@@ -11,8 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 
 import { getConfiguracion, updateConfiguracion } from "@/services/configuracion_service"
+import { getNegocio, updateNegocio } from "@/services/negocio_service"
 import { useAuth } from "@/lib/auth-context"
-import type { ConfiguracionResponse } from "@/types/schemas"
+import type { ConfiguracionResponse, NegocioResponse } from "@/types/schemas"
 
 // ── Días de la semana ─────────────────────────────────────────────────────────
 const DAYS = [
@@ -41,6 +42,7 @@ export function SettingsView() {
 
   // ── Estado de configuración ────────────────────────────────────────────────
   const [config,   setConfig]   = useState<ConfiguracionResponse | null>(null)
+  const [negocioData, setNegocioData] = useState<NegocioResponse | null>(null)
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
 
@@ -51,16 +53,25 @@ export function SettingsView() {
   const [selectedDays,         setSelectedDays]         = useState<string[]>(["1","2","3","4","5"])
   const [horario,              setHorario]              = useState({ desde: "09:00", hasta: "22:00" })
 
+  // ── Campos del negocio ─────────────────────────────────────────────────────
+  const [nombreNegocio, setNombreNegocio] = useState("")
+  const [telefonoNegocio, setTelefonoNegocio] = useState("")
+  const [direccionNegocio, setDireccionNegocio] = useState("")
+
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => {
-    getConfiguracion()
-      .then(data => {
-        setConfig(data)
-        setPedidosActivos(data.pedidosOnlineActivos)
-        setMensajeBienvenida(data.mensajeBienvenida ?? "")
-        setMensajeFueraHorario(data.mensajeFueraHorario ?? "")
-        setSelectedDays(parseDias(data.diasAtencion))
-        setHorario(parseHorario(data.horariosAtencion))
+    Promise.all([getConfiguracion(), getNegocio()])
+      .then(([configData, negocioData]) => {
+        setConfig(configData)
+        setNegocioData(negocioData)
+        setPedidosActivos(configData.pedidosOnlineActivos)
+        setMensajeBienvenida(configData.mensajeBienvenida ?? "")
+        setMensajeFueraHorario(configData.mensajeFueraHorario ?? "")
+        setSelectedDays(parseDias(configData.diasAtencion))
+        setHorario(parseHorario(configData.horariosAtencion))
+        setNombreNegocio(negocioData.nombre)
+        setTelefonoNegocio(negocioData.telefono ?? "")
+        setDireccionNegocio(negocioData.direccion ?? "")
       })
       .catch(() => toast.error("Error al cargar configuración"))
       .finally(() => setLoading(false))
@@ -107,6 +118,24 @@ export function SettingsView() {
     }
   }
 
+  // ── Guardar información del negocio ────────────────────────────────────────
+  const handleSaveNegocio = async () => {
+    setSaving(true)
+    try {
+      const updated = await updateNegocio({
+        nombre: nombreNegocio || undefined,
+        telefono: telefonoNegocio || undefined,
+        direccion: direccionNegocio || undefined,
+      })
+      setNegocioData(updated)
+      toast.success("Información del negocio guardada")
+    } catch {
+      toast.error("Error al guardar información del negocio")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -136,27 +165,40 @@ export function SettingsView() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ── GENERAL ── (datos del negocio — solo lectura por ahora, requiere endpoint propio) */}
+        {/* ── GENERAL ── (datos del negocio — editables) */}
         <TabsContent value="general" className="space-y-6">
           <div className="rounded-2xl border-2 border-border bg-card p-6">
             <h3 className="mb-4 text-lg font-semibold">Información del negocio</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre del negocio</Label>
-                <Input defaultValue={negocio?.nombre ?? ""} className="rounded-xl border-2" readOnly />
+                <Input
+                  value={nombreNegocio}
+                  onChange={e => setNombreNegocio(e.target.value)}
+                  className="rounded-xl border-2"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Teléfono</Label>
-                <Input defaultValue={negocio?.telefono ?? ""} className="rounded-xl border-2" readOnly />
+                <Input
+                  value={telefonoNegocio}
+                  onChange={e => setTelefonoNegocio(e.target.value)}
+                  className="rounded-xl border-2"
+                />
               </div>
               <div className="col-span-2 space-y-2">
                 <Label>Dirección</Label>
-                <Input defaultValue={negocio?.direccion ?? ""} className="rounded-xl border-2" readOnly />
+                <Input
+                  value={direccionNegocio}
+                  onChange={e => setDireccionNegocio(e.target.value)}
+                  className="rounded-xl border-2"
+                />
               </div>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Para actualizar los datos del negocio, usa el endpoint PATCH /negocio cuando esté disponible.
-            </p>
+            <Button className="mt-6 rounded-xl gap-2" onClick={handleSaveNegocio} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Guardar cambios
+            </Button>
           </div>
         </TabsContent>
 

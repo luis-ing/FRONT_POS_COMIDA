@@ -59,6 +59,23 @@ export interface ConfiguracionUpdate {
   mensajeFueraHorario?: string;
 }
 
+// ─── Negocio ──────────────────────────────────────────────────────────────────
+
+export interface NegocioResponse {
+  id: number;
+  nombre: string;
+  telefono: string | null;
+  direccion: string | null;
+  activo: boolean;
+  fechaCreacion: string; // ISO 8601
+}
+
+export interface NegocioUpdate {
+  nombre?: string;
+  telefono?: string;
+  direccion?: string;
+}
+
 // ─── Roles y Permisos ─────────────────────────────────────────────────────────
 
 export interface PermisoResponse {
