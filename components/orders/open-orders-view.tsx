@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import {
   Search, Clock, ChefHat, Plus, Banknote, MoreHorizontal, Edit2,
   Eye, RefreshCw, Loader2, Wifi, WifiOff,
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-import { getVentas, cerrarOrden } from "@/services/venta_service"
+import { getVentas, cerrarOrden, getVenta } from "@/services/venta_service"
 import { getEstatusOrden, getMetodosPago } from "@/services/catalogo_service"
 import {
   getSocket, onNuevaOrden, offNuevaOrden,
@@ -53,6 +53,14 @@ const STATUS_UI: Record<string, {
   },
 }
 
+// Fallback por si el catálogo no ha cargado aún — ajusta los IDs si difieren
+const ESTATUS_FALLBACK: Record<number, string> = {
+  1: "pendiente",
+  2: "en_preparacion",
+  3: "lista",
+  4: "entregada",
+}
+
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export function OpenOrdersView() {
@@ -65,26 +73,36 @@ export function OpenOrdersView() {
   const [loading,        setLoading]        = useState(true)
   const [connected,      setConnected]      = useState(false)
 
+  // Ref para acceder al catálogo dentro de callbacks de socket sin stale closure
+  const estatusOrdenesRef = useRef<EstatusOrdenResponse[]>([])
+
+  // Sincroniza ref con estado en cada render
+  useEffect(() => {
+    estatusOrdenesRef.current = estatusOrdenes
+  }, [estatusOrdenes])
+
   // ── UI ────────────────────────────────────────────────────────────────────
-  const [searchQuery,    setSearchQuery]    = useState("")
-  const [selectedVenta,  setSelectedVenta]  = useState<VentaResponse | null>(null)
-  const [isDetailOpen,   setIsDetailOpen]   = useState(false)
-  const [isPaymentOpen,  setIsPaymentOpen]  = useState(false)
-  const [ventaACobrar,   setVentaACobrar]   = useState<VentaResponse | null>(null)
-  const [closingId,      setClosingId]      = useState<number | null>(null)
+  const [searchQuery,   setSearchQuery]   = useState("")
+  const [selectedVenta, setSelectedVenta] = useState<VentaResponse | null>(null)
+  const [isDetailOpen,  setIsDetailOpen]  = useState(false)
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [ventaACobrar,  setVentaACobrar]  = useState<VentaResponse | null>(null)
+  const [closingId,     setClosingId]     = useState<number | null>(null)
 
   // ── Carga de catálogos ────────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([getEstatusOrden(), getMetodosPago()])
-      .then(([eo, mp]) => { setEstatusOrdenes(eo); setMetodosPago(mp) })
+      .then(([eo, mp]) => {
+        setEstatusOrdenes(eo)
+        setMetodosPago(mp)
+      })
       .catch(() => toast.error("Error al cargar catálogos"))
   }, [])
 
-  // ── Carga de ventas abiertas (idEstatusPago = ABIERTA = 1) ────────────────
+  // ── Carga de ventas abiertas ──────────────────────────────────────────────
   const fetchVentas = useCallback(async () => {
     setLoading(true)
     try {
-      // Filtramos por idEstatusPago=1 (ABIERTA). Ajusta el id si tu BD difiere.
       const data = await getVentas({ idEstatusPago: 1 })
       setVentas(data)
     } catch {
@@ -96,24 +114,77 @@ export function OpenOrdersView() {
 
   useEffect(() => { fetchVentas() }, [fetchVentas])
 
+  // ── Helpers de estatus ────────────────────────────────────────────────────
+  // useCallback para que stats (useMemo) pueda declararlo como dependencia
+  const getNombreEstatus = useCallback((idEstatusOrden: number): string => {
+    // 1. Busca en el estado de React (renders normales)
+    const fromState = estatusOrdenes.find(e => e.id === idEstatusOrden)?.nombre
+    if (fromState) return fromState
+    // 2. Busca en el ref (dentro de callbacks de socket)
+    const fromRef = estatusOrdenesRef.current.find(e => e.id === idEstatusOrden)?.nombre
+    if (fromRef) return fromRef
+    // 3. Fallback hardcoded por si el catálogo aún no cargó
+    return ESTATUS_FALLBACK[idEstatusOrden] ?? "pendiente"
+  }, [estatusOrdenes])
+
+  const getStatusUI = useCallback((idEstatusOrden: number) =>
+    STATUS_UI[getNombreEstatus(idEstatusOrden)] ?? STATUS_UI["pendiente"]
+  , [getNombreEstatus])
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => ({
+    total:          ventas.length,
+    pendientes:     ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "pendiente").length,
+    enPreparacion:  ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "en_preparacion").length,
+    listas:         ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "lista").length,
+    totalPendiente: ventas.reduce((sum, v) => sum + Number(v.total), 0),
+  }), [ventas, getNombreEstatus])
+
+  // ── Handlers de socket — definidos FUERA del useEffect ───────────────────
+  const handleNueva = useCallback(async (venta: VentaResponse) => {
+    try {
+      const ventaCompleta = await getVenta(venta.id)
+      setVentas(prev =>
+        prev.some(v => v.id === ventaCompleta.id) ? prev : [ventaCompleta, ...prev]
+      )
+    } catch {
+      setVentas(prev =>
+        prev.some(v => v.id === venta.id) ? prev : [venta, ...prev]
+      )
+    }
+  }, [])
+
+  const handleActualizada = useCallback(async (venta: VentaResponse) => {
+    try {
+      const ventaCompleta = await getVenta(venta.id)
+      console.log(
+        "[Socket] orden_actualizada:", ventaCompleta.id,
+        "| idEstatusOrden:", ventaCompleta.idEstatusOrden,
+        "| nombre:", estatusOrdenesRef.current.find(e => e.id === ventaCompleta.idEstatusOrden)?.nombre
+          ?? ESTATUS_FALLBACK[ventaCompleta.idEstatusOrden]
+      )
+      setVentas(prev => prev.map(v => v.id === ventaCompleta.id ? ventaCompleta : v))
+    } catch {
+      setVentas(prev => prev.map(v => v.id === venta.id ? venta : v))
+    }
+  }, [])
+
+  const handleLista = useCallback(async ({ venta_id }: { venta_id: number }) => {
+    try {
+      const ventaCompleta = await getVenta(venta_id)
+      setVentas(prev => prev.map(v => v.id === venta_id ? ventaCompleta : v))
+      toast.success(`¡Orden #${venta_id} está lista para cobrar!`)
+    } catch {
+      toast.success(`¡Orden #${venta_id} está lista para cobrar!`)
+    }
+  }, [])
+
   // ── WebSockets ────────────────────────────────────────────────────────────
   useEffect(() => {
     const socket = getSocket()
     socket.on("connect",    () => setConnected(true))
     socket.on("disconnect", () => setConnected(false))
     if (socket.connected) setConnected(true)
-
-    const handleNueva = (venta: VentaResponse) => {
-      setVentas(prev => prev.some(v => v.id === venta.id) ? prev : [venta, ...prev])
-    }
-    const handleActualizada = (venta: VentaResponse) => {
-      setVentas(prev => prev.map(v => v.id === venta.id ? venta : v))
-    }
-    // Cuando cocina marca lista, resaltar en la UI
-    const handleLista = (venta: VentaResponse) => {
-      setVentas(prev => prev.map(v => v.id === venta.id ? venta : v))
-      toast.success(`¡Orden #${venta.id} está lista para cobrar!`)
-    }
 
     onNuevaOrden(handleNueva)
     onOrdenActualizada(handleActualizada)
@@ -126,15 +197,9 @@ export function OpenOrdersView() {
       socket.off("connect")
       socket.off("disconnect")
     }
-  }, [])
+  }, [handleNueva, handleActualizada, handleLista])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  const getNombreEstatus = (idEstatusOrden: number) =>
-    estatusOrdenes.find(e => e.id === idEstatusOrden)?.nombre ?? "pendiente"
-
-  const getStatusUI = (idEstatusOrden: number) =>
-    STATUS_UI[getNombreEstatus(idEstatusOrden)] ?? STATUS_UI["pendiente"]
-
+  // ── Helpers de formato ────────────────────────────────────────────────────
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
 
@@ -162,15 +227,13 @@ export function OpenOrdersView() {
     setClosingId(ventaACobrar.id)
     try {
       const closed = await cerrarOrden(ventaACobrar.id, { idMetodoPago })
-      // Quitamos la orden de la lista (ya está cerrada)
       setVentas(prev => prev.filter(v => v.id !== closed.id))
       toast.success(`Orden #${closed.id} cobrada exitosamente`)
       setIsPaymentOpen(false)
       setIsDetailOpen(false)
       setVentaACobrar(null)
     } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? "Error al cerrar la orden"
-      toast.error(msg)
+      toast.error(err?.response?.data?.detail ?? "Error al cerrar la orden")
     } finally {
       setClosingId(null)
     }
@@ -180,15 +243,6 @@ export function OpenOrdersView() {
   const handleViewDetail = (venta: VentaResponse) => {
     setSelectedVenta(venta)
     setIsDetailOpen(true)
-  }
-
-  // ── Stats ─────────────────────────────────────────────────────────────────
-  const stats = {
-    total:          ventas.length,
-    pendientes:     ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "pendiente").length,
-    enPreparacion:  ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "en_preparacion").length,
-    listas:         ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "lista").length,
-    totalPendiente: ventas.reduce((sum, v) => sum + Number(v.total), 0),
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -201,16 +255,23 @@ export function OpenOrdersView() {
           <p className="text-muted-foreground">Gestiona las órdenes pendientes de cobro</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Indicador WebSocket */}
           <div className={cn(
             "flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-medium",
             connected
               ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400"
               : "border-destructive/30 bg-destructive/10 text-destructive"
           )}>
-            {connected ? <><Wifi className="h-4 w-4" /> En línea</> : <><WifiOff className="h-4 w-4" /> Desconectado</>}
+            {connected
+              ? <><Wifi className="h-4 w-4" /> En línea</>
+              : <><WifiOff className="h-4 w-4" /> Desconectado</>
+            }
           </div>
-          <Button variant="outline" className="rounded-xl border-2 gap-2" onClick={fetchVentas} disabled={loading}>
+          <Button
+            variant="outline"
+            className="rounded-xl border-2 gap-2"
+            onClick={fetchVentas}
+            disabled={loading}
+          >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             Actualizar
           </Button>
@@ -266,7 +327,7 @@ export function OpenOrdersView() {
         <div className="flex-1 overflow-auto">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map(venta => {
-              const ui = getStatusUI(venta.idEstatusOrden)
+              const ui     = getStatusUI(venta.idEstatusOrden)
               const esLista = getNombreEstatus(venta.idEstatusOrden) === "lista"
               return (
                 <div
@@ -287,7 +348,11 @@ export function OpenOrdersView() {
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100"
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -299,17 +364,14 @@ export function OpenOrdersView() {
                           <Edit2 className="mr-2 h-4 w-4" /> Agregar productos
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          disabled
-                        >
+                        <DropdownMenuItem className="text-destructive" disabled>
                           Cancelar orden
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
 
-                  {/* Badge + notas */}
+                  {/* Badge estatus */}
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className={cn("rounded-lg border-2", ui.color)}>
                       {ui.label}
@@ -367,7 +429,7 @@ export function OpenOrdersView() {
               )
             })}
 
-            {filtered.length === 0 && !loading && (
+            {filtered.length === 0 && (
               <div className="col-span-full flex h-40 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border text-muted-foreground">
                 <p className="font-medium">No hay órdenes abiertas</p>
                 <p className="text-sm">Las nuevas órdenes aparecerán aquí en tiempo real</p>
@@ -406,7 +468,6 @@ export function OpenOrdersView() {
                 </span>
               </div>
 
-              {/* Productos */}
               <div className="rounded-xl border-2 border-border">
                 <div className="border-b border-border px-4 py-2">
                   <p className="font-medium">Productos ({selectedVenta.detalleventa.length})</p>
@@ -444,7 +505,11 @@ export function OpenOrdersView() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button variant="outline" className="flex-1 rounded-xl border-2" onClick={() => setIsDetailOpen(false)}>
+                <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl border-2"
+                  onClick={() => setIsDetailOpen(false)}
+                >
                   Cerrar
                 </Button>
                 <Button
@@ -466,10 +531,10 @@ export function OpenOrdersView() {
           open={isPaymentOpen}
           onOpenChange={setIsPaymentOpen}
           items={ventaACobrar.detalleventa.map(d => ({
-            id:       d.idProducto,
-            name:     d.producto?.nombre ?? `Producto #${d.idProducto}`,
-            price:    Number(d.precioUnitario),
-            quantity: d.cantidad,
+            id:              d.idProducto,
+            name:            d.producto?.nombre ?? `Producto #${d.idProducto}`,
+            price:           Number(d.precioUnitario),
+            quantity:        d.cantidad,
             enviadoACocina:  d.enviadoACocina,
             requiereCoccion: d.producto?.requiereCoccion ?? false,
           }))}

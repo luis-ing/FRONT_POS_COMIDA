@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-import { getVentasActivasCocina } from "@/services/venta_service"
+import { getVenta, getVentasActivasCocina } from "@/services/venta_service"
 import { marcarEnPreparacion, marcarOrdenLista } from "@/services/cocina_service"
 import {
   getSocket,
@@ -19,10 +19,10 @@ import {
 import type { VentaResponse } from "@/types/schemas"
 
 export function KitchenView() {
-  const [ordenes,     setOrdenes]     = useState<VentaResponse[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [connected,   setConnected]   = useState(false)
-  const [processing,  setProcessing]  = useState<Record<number, boolean>>({})
+  const [ordenes, setOrdenes] = useState<VentaResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [connected, setConnected] = useState(false)
+  const [processing, setProcessing] = useState<Record<number, boolean>>({})
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
   const fetchActivas = useCallback(async () => {
@@ -36,31 +36,60 @@ export function KitchenView() {
     }
   }, [])
 
+  // ── Handlers de socket — definidos FUERA del useEffect ───────────────────
+  const handleNuevaOrden = useCallback(async (venta: VentaResponse) => {
+    console.log("[Socket] nueva_orden recibida:", venta.id)
+    try {
+      const ventaCompleta = await getVenta(venta.id)
+
+      const debeIgnorar =
+        ventaCompleta.detalleventa?.length > 0 &&
+        ventaCompleta.detalleventa.every(d => d.producto?.requiereCoccion === false)
+
+      if (debeIgnorar) return
+
+      setOrdenes(prev => {
+        if (prev.some(o => o.id === ventaCompleta.id)) return prev
+        toast.info(`Nueva orden #${ventaCompleta.id}`)
+        return [ventaCompleta, ...prev]
+      })
+    } catch {
+      toast.error(`Error al cargar orden #${venta.id}`)
+    }
+  }, [])
+
+  const handleOrdenActualizada = useCallback(async (venta: VentaResponse) => {
+    console.log("[Socket] orden_actualizada recibida:", venta.id)
+    try {
+      const ventaCompleta = await getVenta(venta.id)
+
+      const debeIgnorar =
+        ventaCompleta.detalleventa?.length > 0 &&
+        ventaCompleta.detalleventa.every(d => d.producto?.requiereCoccion === false)
+
+      if (debeIgnorar) return
+
+      setOrdenes(prev => {
+        const existe = prev.some(o => o.id === ventaCompleta.id)
+        if (existe) {
+          return prev.map(o => o.id === ventaCompleta.id ? ventaCompleta : o)
+        }
+        toast.info(`Nueva orden #${ventaCompleta.id}`)
+        return [ventaCompleta, ...prev]
+      })
+    } catch {
+      toast.error(`Error al actualizar orden #${venta.id}`)
+    }
+  }, [])
+
   // ── WebSockets ────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchActivas()
 
     const socket = getSocket()
-
-    socket.on("connect",    () => setConnected(true))
+    socket.on("connect", () => setConnected(true))
     socket.on("disconnect", () => setConnected(false))
     if (socket.connected) setConnected(true)
-
-    // Nueva orden completa — la agregamos al inicio de la lista
-    const handleNuevaOrden = (venta: VentaResponse) => {
-      setOrdenes(prev => {
-        // Evitar duplicados si ya la tenemos
-        if (prev.some(o => o.id === venta.id)) return prev
-        toast.info(`Nueva orden #${venta.id}`)
-        return [venta, ...prev]
-      })
-    }
-
-    // Orden actualizada — solo reemplazamos la existente
-    const handleOrdenActualizada = (venta: VentaResponse) => {
-      setOrdenes(prev => prev.map(o => o.id === venta.id ? venta : o))
-      toast.info(`Orden #${venta.id} actualizada`)
-    }
 
     onNuevaOrden(handleNuevaOrden)
     onOrdenActualizada(handleOrdenActualizada)
@@ -71,7 +100,7 @@ export function KitchenView() {
       socket.off("connect")
       socket.off("disconnect")
     }
-  }, [fetchActivas])
+  }, [fetchActivas, handleNuevaOrden, handleOrdenActualizada])
 
   // ── Acciones ──────────────────────────────────────────────────────────────
   const setProcessingFor = (id: number, value: boolean) =>
@@ -93,7 +122,6 @@ export function KitchenView() {
     setProcessingFor(ventaId, true)
     try {
       const updated = await marcarOrdenLista(ventaId)
-      // Al marcar lista, la quitamos de la pantalla de cocina
       setOrdenes(prev => prev.filter(o => o.id !== updated.id))
       toast.success(`Orden #${ventaId} marcada como lista`)
     } catch {
@@ -104,18 +132,17 @@ export function KitchenView() {
   }
 
   // ── Helpers de UI ─────────────────────────────────────────────────────────
-  const getEstatusId = (o: VentaResponse) => o.idEstatusOrden
-  // Asumiendo: 1=pendiente, 2=en_preparacion (ajusta según tus catálogos reales)
-  const isPendiente      = (o: VentaResponse) => getEstatusId(o) === 1
-  const isEnPreparacion  = (o: VentaResponse) => getEstatusId(o) === 2
+  const isPendiente = (o: VentaResponse) => o.idEstatusOrden === 1
+  const isEnPreparacion = (o: VentaResponse) => o.idEstatusOrden === 2
 
-  const pendingCount    = ordenes.filter(isPendiente).length
-  const preparingCount  = ordenes.filter(isEnPreparacion).length
+  const pendingCount = ordenes.filter(isPendiente).length
+  const preparingCount = ordenes.filter(isEnPreparacion).length
 
-  const getHora = (o: VentaResponse) => {
-    const d = new Date(o.fechaApertura)
-    return d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
-  }
+  const getHora = (o: VentaResponse) =>
+    new Date(o.fechaApertura).toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -133,13 +160,12 @@ export function KitchenView() {
         <div>
           <h1 className="flex items-center gap-3 text-2xl font-bold text-foreground">
             <ChefHat className="h-7 w-7 text-primary" />
-            Pantalla de Cocina
+            Cocina
           </h1>
           <p className="text-muted-foreground">Gestiona las órdenes en tiempo real</p>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Indicador de conexión WebSocket */}
           <div className={cn(
             "flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-medium",
             connected
@@ -180,13 +206,12 @@ export function KitchenView() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-foreground">#{orden.id}</span>
-                    {/* Canal: 1=Mostrador, 2=WhatsApp — ajusta según tus catálogos */}
                     <Badge
                       variant="outline"
                       className={cn(
                         "rounded-lg border-2",
                         orden.idCanalVenta === 2 &&
-                          "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
+                        "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
                       )}
                     >
                       {orden.idCanalVenta === 2 && <MessageSquare className="mr-1 h-3 w-3" />}
@@ -220,7 +245,6 @@ export function KitchenView() {
                           )}>
                             {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
                           </p>
-                          {/* Los productos recién agregados se destacan */}
                           {!detalle.enviadoACocina && (
                             <span className="text-xs text-primary">● Nuevo</span>
                           )}
@@ -239,9 +263,7 @@ export function KitchenView() {
                     onClick={() => handleIniciarPreparacion(orden.id)}
                     disabled={processing[orden.id]}
                   >
-                    {processing[orden.id]
-                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      : null}
+                    {processing[orden.id] && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Iniciar preparación
                   </Button>
                 ) : (

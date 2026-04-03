@@ -67,21 +67,20 @@ export function disconnectSocket(): void {
 export function onNuevaOrden(cb: (venta: VentaResponse) => void): void {
   getSocket().on("nueva_orden", cb);
 }
-export function offNuevaOrden(): void {
-  getSocket().off("nueva_orden");
+export function offNuevaOrden(cb: (venta: VentaResponse) => void): void {
+  getSocket().off("nueva_orden", cb); // ← se pasa cb, no se borra todo
 }
 
 export function onOrdenActualizada(cb: (venta: VentaResponse) => void): void {
   getSocket().on("orden_actualizada", cb);
 }
-export function offOrdenActualizada(): void {
-  getSocket().off("orden_actualizada");
+export function offOrdenActualizada(cb: (venta: VentaResponse) => void): void {
+  getSocket().off("orden_actualizada", cb); // ← ídem
 }
 
-// CORRECCIÓN: El tipo del callback debe coincidir con el ID enviado por el backend
 export function onOrdenLista(cb: (data: { venta_id: number }) => void): void {
   getSocket().on("orden_lista", cb);
 }
-export function offOrdenLista(): void {
-  getSocket().off("orden_lista");
+export function offOrdenLista(cb: (data: { venta_id: number }) => void): void {
+  getSocket().off("orden_lista", cb); // ← ídem
 }
