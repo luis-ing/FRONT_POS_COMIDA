@@ -12,9 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Copy project to deploy folder
+        run: |
+          rsync -av --delete ./ /docker/apps/front-pos-comida/
+
       - name: Deploy with Docker Compose
         run: |
           cd /docker/apps/front-pos-comida
-          git pull origin main
           docker compose down
           docker compose up -d --build
