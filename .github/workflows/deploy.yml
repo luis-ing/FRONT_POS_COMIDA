@@ -14,7 +14,10 @@ jobs:
 
       - name: Copy project to deploy folder
         run: |
-          rsync -av --delete ./ /docker/apps/front-pos-comida/
+            rsync -av --delete \
+            --exclude '.env' \
+            --exclude 'docker-compose.yml' \
+            ./ /docker/apps/front-pos-comida/
 
       - name: Deploy with Docker Compose
         run: |
