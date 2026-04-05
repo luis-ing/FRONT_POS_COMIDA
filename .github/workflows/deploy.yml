@@ -12,15 +12,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy project to deploy folder
-        run: |
-            rsync -av --delete \
-            --exclude '.env' \
-            --exclude 'docker-compose.yml' \
-            ./ /docker/apps/front-pos-comida/
+      - name: Copy .env from server
+        run: cp /docker/apps/front-pos-comida/.env .env
 
-      - name: Deploy with Docker Compose
+      - name: Build and deploy
         run: |
-          cd /docker/apps/front-pos-comida
-          docker compose down
-          docker compose up -d --build
+            docker compose down || true
+            docker compose up -d --build
