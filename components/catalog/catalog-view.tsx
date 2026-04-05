@@ -64,9 +64,10 @@ export function CatalogView() {
   const [loadingData, setLoadingData] = useState(true)
 
   // ── UI ────────────────────────────────────────────────────────────────────
-  const [searchQuery,  setSearchQuery]  = useState("")
-  const [viewMode,     setViewMode]     = useState<"grid" | "list">("grid")
-  const [saleFlow,     setSaleFlow]     = useState<SaleFlow>("flujo1")
+  const [searchQuery,      setSearchQuery]      = useState("")
+  const [viewMode,         setViewMode]         = useState<"grid" | "list">("grid")
+  const [saleFlow,         setSaleFlow]         = useState<SaleFlow>("flujo1")
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
 
   // ── Carrito ───────────────────────────────────────────────────────────────
   const [cartItems,      setCartItems]      = useState<CartItem[]>([])
@@ -306,6 +307,11 @@ export function CatalogView() {
     setCurrentVenta(null)
   }
 
+  // ── Seleccionar categoría con toggle ──────────────────────────────────────
+  const handleCategorySelect = (categoryId: number) => {
+    setSelectedCategoryId(prev => prev === categoryId ? null : categoryId)
+  }
+
   // ── Dispatch de pago según flujo ──────────────────────────────────────────
   const handleConfirmPayment = async (idMetodoPago: number) => {
     if (saleFlow === "flujo1") {
@@ -316,9 +322,11 @@ export function CatalogView() {
   }
 
   // ── Filtrado ──────────────────────────────────────────────────────────────
-  const filteredProducts = productos.filter(p =>
-    p.nombre.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredProducts = productos.filter(p => {
+    const matchesSearch = p.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCategory = !selectedCategoryId || p.idCategoria === selectedCategoryId
+    return matchesSearch && matchesCategory
+  })
 
   const subtotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
@@ -406,9 +414,11 @@ export function CatalogView() {
           categories={categorias.map(c => ({
             id:    c.id,
             name:  c.nombre,
-            count: filteredProducts.filter(p => p.idCategoria === c.id).length,
+            count: productos.filter(p => p.idCategoria === c.id).length,
             color: c.color ?? "#6b7280",
           }))}
+          selectedCategoryId={selectedCategoryId}
+          onSelectCategory={handleCategorySelect}
         />
 
         {/* Productos */}
