@@ -9,6 +9,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -16,7 +19,7 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 
-import { getVentas } from "@/services/venta_service"
+import { getVentas, getVenta } from "@/services/venta_service"
 import { getEstatusOrden, getEstatusPago, getCanalesVenta } from "@/services/catalogo_service"
 import type { VentaResponse, EstatusOrdenResponse, EstatusPagoResponse, CanalVentaResponse } from "@/types/schemas"
 
@@ -35,6 +38,9 @@ export function OrdersView() {
   const [estatusPagos,    setEstatusPagos]    = useState<EstatusPagoResponse[]>([])
   const [canales,         setCanales]         = useState<CanalVentaResponse[]>([])
   const [loading,         setLoading]         = useState(true)
+  const [isDetailOpen,    setIsDetailOpen]    = useState(false)
+  const [selectedVenta,   setSelectedVenta]   = useState<VentaResponse | null>(null)
+  const [detailLoading,   setDetailLoading]   = useState(false)
 
   // ── Filtros ───────────────────────────────────────────────────────────────
   const [searchQuery,    setSearchQuery]    = useState("")
@@ -80,6 +86,37 @@ export function OrdersView() {
 
   const getHora = (iso: string) =>
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+
+  const getFecha = (iso: string) =>
+    new Date(iso).toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+
+  const getNombrePago = (id: number) =>
+    estatusPagos.find(e => e.id === id)?.nombre ?? String(id)
+
+  const openVentaDetail = async (ventaId: number) => {
+    setIsDetailOpen(true)
+    setSelectedVenta(null)
+    setDetailLoading(true)
+
+    try {
+      const venta = await getVenta(ventaId)
+      setSelectedVenta(venta)
+    } catch {
+      toast.error("Error al cargar detalles de la orden")
+      setIsDetailOpen(false)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const closeVentaDetail = () => {
+    setIsDetailOpen(false)
+    setSelectedVenta(null)
+  }
 
   // ── Filtrado local ────────────────────────────────────────────────────────
   const filtered = ventas.filter(v => {
@@ -148,25 +185,26 @@ export function OrdersView() {
       </div>
 
       {/* Tabla */}
-      <div className="flex-1 rounded-2xl border-2 border-border bg-card overflow-hidden">
+      <div className="flex-1 rounded-2xl border-2 border-border bg-card overflow-hidden flex flex-col">
         {loading ? (
           <div className="flex h-40 items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b-2 border-border hover:bg-transparent">
-                <TableHead className="font-semibold">ID</TableHead>
-                <TableHead className="font-semibold">Canal</TableHead>
-                <TableHead className="font-semibold">Productos</TableHead>
-                <TableHead className="font-semibold">Total</TableHead>
-                <TableHead className="font-semibold">Estado</TableHead>
-                <TableHead className="font-semibold">Hora</TableHead>
-                <TableHead className="w-[50px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <div className="overflow-y-auto max-h-[57vh]">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b-2 border-border hover:bg-transparent">
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">ID</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Canal</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Productos</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Total</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Estado</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Hora</TableHead>
+                  <TableHead className="sticky top-0 bg-card z-20 w-[50px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
               {filtered.map(venta => {
                 const nombreEstatus = getNombreEstatus(venta.idEstatusOrden)
                 return (
@@ -196,7 +234,7 @@ export function OrdersView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="rounded-xl">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openVentaDetail(venta.id)}>
                             <Eye className="mr-2 h-4 w-4" /> Ver detalles
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -214,8 +252,98 @@ export function OrdersView() {
               )}
             </TableBody>
           </Table>
+          </div>
         )}
       </div>
+
+      <Dialog open={isDetailOpen} onOpenChange={open => { if (!open) closeVentaDetail(); setIsDetailOpen(open) }}>
+        <DialogContent className="rounded-2xl border-2 sm:max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex flex-col gap-1">
+              Detalle de orden
+              {selectedVenta && (
+                <span className="text-sm text-muted-foreground">
+                  Orden #{selectedVenta.id} · {getNombreEstatus(selectedVenta.idEstatusOrden).replace("_", " ")}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className="flex h-52 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : selectedVenta ? (
+            <div className="space-y-6">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border-2 border-border bg-muted/50 p-4">
+                  <p className="text-sm text-muted-foreground">Fecha</p>
+                  <p className="font-medium">{getFecha(selectedVenta.fechaApertura)}</p>
+                  <p className="text-sm text-muted-foreground">Hora</p>
+                  <p className="font-medium">{getHora(selectedVenta.fechaApertura)}</p>
+                </div>
+                <div className="rounded-2xl border-2 border-border bg-muted/50 p-4">
+                  <p className="text-sm text-muted-foreground">Canal</p>
+                  <p className="font-medium">{getNombreCanal(selectedVenta.idCanalVenta)}</p>
+                  <p className="text-sm text-muted-foreground">Pago</p>
+                  <p className="font-medium">{getNombrePago(selectedVenta.idEstatusPago)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border-2 border-border bg-card overflow-hidden">
+                <div className="border-b border-border px-4 py-3">
+                  <p className="font-medium">Productos ({selectedVenta.detalleventa.length})</p>
+                </div>
+                <div className="max-h-72 overflow-auto">
+                  <div className="space-y-3 p-4">
+                    {selectedVenta.detalleventa.map(item => (
+                      <div key={item.id} className="rounded-2xl border-2 border-border p-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium">{item.producto?.nombre ?? `Producto #${item.idProducto}`}</p>
+                            <p className="text-sm text-muted-foreground">Cantidad: {item.cantidad}</p>
+                          </div>
+                          <p className="font-semibold">${Number(item.subtotal).toFixed(2)}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-2 text-sm text-muted-foreground">
+                          <span>{item.producto?.categoria?.nombre}</span>
+                          {item.producto?.requiereCoccion && (
+                            <span className="rounded-full border px-2 py-0.5">requiere cocción</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {selectedVenta.notas && (
+                <div className="rounded-2xl border-2 border-border bg-muted/30 p-4">
+                  <p className="mb-2 text-sm font-medium">Notas</p>
+                  <p className="text-sm text-muted-foreground">{selectedVenta.notas}</p>
+                </div>
+              )}
+
+              <div className="rounded-2xl border-2 border-border bg-primary/5 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Total</span>
+                  <span className="text-2xl font-bold text-foreground">${Number(selectedVenta.total).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button variant="outline" className="flex-1 rounded-xl border-2" onClick={closeVentaDetail}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No hay datos para mostrar.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
