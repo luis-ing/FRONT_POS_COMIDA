@@ -57,7 +57,7 @@ export function CartPanel({
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
 
   return (
-    <aside className="flex w-96 flex-col border-l-2 border-border bg-card">
+    <aside className="flex w-96 flex-col h-full min-h-0 border-l-2 border-border bg-card">
       {/* Header */}
       <div className="flex items-center justify-between border-b-2 border-border p-4">
         <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export function CartPanel({
       </div>
 
       {/* Items */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 min-h-0 p-4">
         {items.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center text-center text-muted-foreground">
             <p>No hay productos</p>

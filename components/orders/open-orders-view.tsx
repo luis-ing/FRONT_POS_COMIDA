@@ -468,12 +468,12 @@ export function OpenOrdersView() {
                 </span>
               </div>
 
-              <div className="rounded-xl border-2 border-border">
+              <div className="rounded-xl border-2 border-border overflow-hidden">
                 <div className="border-b border-border px-4 py-2">
                   <p className="font-medium">Productos ({selectedVenta.detalleventa.length})</p>
                 </div>
-                <ScrollArea className="max-h-60">
-                  <div className="space-y-3 p-4">
+                <ScrollArea className="h-52 overflow-hidden">
+                  <div className="space-y-2 p-3">
                     {selectedVenta.detalleventa.map(d => (
                       <div key={d.id} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">

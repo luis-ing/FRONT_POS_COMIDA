@@ -12,6 +12,7 @@ import { CategoryGrid } from "./category-grid"
 import { ProductGrid } from "./product-grid"
 import { CartPanel } from "./cart-panel"
 import { PaymentModal } from "./payment-modal"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 import { getProductos } from "@/services/producto_service"
 import { getCategorias } from "@/services/categoria_service"
@@ -342,7 +343,7 @@ export function CatalogView() {
   return (
     <div className="flex h-full">
       {/* Contenido principal */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-6">
         {/* Búsqueda */}
         <div className="mb-6 flex items-center gap-4">
           <div className="relative flex-1">
@@ -414,7 +415,7 @@ export function CatalogView() {
           categories={categorias.map(c => ({
             id:    c.id,
             name:  c.nombre,
-            count: productos.filter(p => p.idCategoria === c.id).length,
+            count: filteredProducts.filter(p => p.idCategoria === c.id).length,
             color: c.color ?? "#6b7280",
           }))}
           selectedCategoryId={selectedCategoryId}
@@ -422,24 +423,26 @@ export function CatalogView() {
         />
 
         {/* Productos */}
-        <div className="mt-6">
+        <div className="mt-6 flex min-h-0 flex-1 flex-col">
           <h3 className="mb-4 text-lg font-medium">Productos</h3>
-          <ProductGrid
-            products={filteredProducts.map(p => ({
-              id:              p.id,
-              name:            p.nombre,
-              price:           Number(p.precio),
-              image:           null,
-              category:        p.categoria?.nombre ?? "",
-              requiereCoccion: p.requiereCoccion,
-            }))}
-            viewMode={viewMode}
-            onAddToCart={item => {
-              const prod = productos.find(p => p.id === item.id)
-              if (prod) addToCart(prod)
-            }}
-            cartItems={cartItems}
-          />
+          <ScrollArea className="flex-1 min-h-0">
+            <ProductGrid
+              products={filteredProducts.map(p => ({
+                id:              p.id,
+                name:            p.nombre,
+                price:           Number(p.precio),
+                image:           null,
+                category:        p.categoria?.nombre ?? "",
+                requiereCoccion: p.requiereCoccion,
+              }))}
+              viewMode={viewMode}
+              onAddToCart={item => {
+                const prod = productos.find(p => p.id === item.id)
+                if (prod) addToCart(prod)
+              }}
+              cartItems={cartItems}
+            />
+          </ScrollArea>
         </div>
       </div>
 

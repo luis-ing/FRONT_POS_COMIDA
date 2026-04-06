@@ -40,10 +40,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 const navItems = [
   { title: "Catálogo",        href: "/",                icon: LayoutGrid  },
   { title: "Órdenes Abiertas",href: "/ordenes-abiertas",icon: FileText    },
-  { title: "Órdenes",         href: "/ordenes",         icon: ClipboardList},
   { title: "Cocina",          href: "/cocina",           icon: ChefHat     },
-  { title: "Productos",       href: "/productos",        icon: Package     },
   { title: "Calculadora",     href: "/calculadora",      icon: Calculator  },
+  { title: "Productos",       href: "/productos",        icon: Package     },
+  { title: "Órdenes",         href: "/ordenes",         icon: ClipboardList},
   { title: "Clientes",        href: "/clientes",         icon: Users       },
   { title: "Usuarios",        href: "/usuarios",         icon: UserCog     },
   { title: "Configuración",   href: "/configuracion",    icon: Settings    },
