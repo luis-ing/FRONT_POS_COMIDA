@@ -415,7 +415,7 @@ export function CatalogView() {
           categories={categorias.map(c => ({
             id:    c.id,
             name:  c.nombre,
-            count: filteredProducts.filter(p => p.idCategoria === c.id).length,
+            count: productos.filter(p => p.idCategoria === c.id).length,
             color: c.color ?? "#6b7280",
           }))}
           selectedCategoryId={selectedCategoryId}
