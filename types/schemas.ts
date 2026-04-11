@@ -222,6 +222,7 @@ export interface DetalleVentaResponse {
   precioUnitario: number;
   subtotal: number;
   enviadoACocina: boolean;
+  cocinado: boolean;
   fechaEnvio: string | null;
   producto: ProductoResponse | null;
 }

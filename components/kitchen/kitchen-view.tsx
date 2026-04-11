@@ -241,11 +241,11 @@ export function KitchenView() {
                         <div>
                           <p className={cn(
                             "font-medium text-foreground",
-                            !detalle.enviadoACocina && "text-primary font-bold"
+                            !detalle.cocinado && "text-primary font-bold"
                           )}>
                             {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
                           </p>
-                          {!detalle.enviadoACocina && (
+                          {!detalle.cocinado && (
                             <span className="text-xs text-primary">● Nuevo</span>
                           )}
                         </div>
