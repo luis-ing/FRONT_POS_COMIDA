@@ -11,6 +11,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useEffect, useRef } from "react"
 import type { CartItem, SaleFlow, OpenOrderSummary } from "./catalog-view"
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -47,6 +48,8 @@ export function CartPanel({
   onLoadOrder,
   submitting = false,
 }: CartPanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
   const subtotal     = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const pendingItems = items.filter(i => !i.enviadoACocina)
   const sentItems    = items.filter(i => i.enviadoACocina)
@@ -55,6 +58,13 @@ export function CartPanel({
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+
+  // Scroll automático hacia abajo cuando se agregue un producto
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [items.length])
 
   return (
     <aside className="flex w-96 flex-col h-full min-h-0 border-l-2 border-border bg-card">
@@ -217,6 +227,9 @@ export function CartPanel({
                 ))}
               </div>
             )}
+
+          {/* Elemento invisible para scroll automático */}
+          <div ref={scrollRef} />
           </div>
         )}
       </ScrollArea>
