@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/lib/auth-context'
+import { GoogleAnalytics } from '@next/third-parties/google'
+import { env } from '@/config/env'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -50,6 +52,7 @@ export default function RootLayout({
           </AuthProvider>
         </ThemeProvider>
         <Analytics />
+        <GoogleAnalytics gaId={env.GA_ID!} />
       </body>
     </html>
   )

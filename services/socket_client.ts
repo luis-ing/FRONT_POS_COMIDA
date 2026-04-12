@@ -20,8 +20,24 @@ interface ClientToServerEvents {
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
+function getSocketUrl(): string {
+  if (typeof window === "undefined") return "";
+
+  const rawUrl = process.env.NEXT_PUBLIC_API_URL?.trim() || window.location.origin;
+
+  try {
+    const parsed = new URL(rawUrl, window.location.origin);
+    const socketUrl = parsed.origin;
+    console.log("[Socket] URL configurada:", rawUrl, "-> Socket URL:", socketUrl);
+    return socketUrl;
+  } catch (error) {
+    console.warn("[Socket] URL de socket inválida, usando valor sin normalizar:", rawUrl, error);
+    return rawUrl;
+  }
+}
+
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
-  if (socket?.connected) return socket;
+  if (socket) return socket;
 
   // Obtenemos los datos de localStorage
   const token = typeof window !== "undefined" ? localStorage.getItem("tienda_comida_token") : null;
@@ -36,25 +52,48 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
     }
   }
 
-  socket = io(process.env.NEXT_PUBLIC_API_URL ?? "", {
+  const socketUrl = getSocketUrl();
+
+  console.log("[Socket] Creando conexión a:", socketUrl, "con negocioId:", negocioId);
+
+  socket = io(socketUrl, {
+    path: "/socket.io",
     auth: { 
       token, 
-      negocio_id: negocioId // CORRECCIÓN: Se envía aquí para que el backend lo reciba en 'connect'
+      negocio_id: negocioId,
     },
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
     autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 5, // Limitar a 5 intentos en lugar de infinito
+    reconnectionDelay: 2000, // Aumentar delay inicial
+    reconnectionDelayMax: 10000, // Máximo delay
+    timeout: 10000,
   });
 
   socket.on("connect", () => {
-    console.log(`[Socket] Conectado al room del negocio: ${negocioId}`);
+    console.log(`[Socket] ✅ Conectado al room del negocio: ${negocioId}`);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.warn(`[Socket] ❌ Desconectado (${reason})`);
   });
 
   socket.on("connect_error", (err) => {
-    console.error("[Socket] Error de conexión:", err.message);
+    console.error("[Socket] ❌ Error de conexión:", err.message, err);
+  });
+
+  socket.io.on("reconnect_attempt", (attempt: number) => {
+    console.info(`[Socket] 🔄 Intento de reconexión #${attempt}`);
+  });
+
+  socket.io.on("reconnect_failed", () => {
+    console.error("[Socket] ❌ Fallaron todos los intentos de reconexión");
   });
 
   return socket;
 }
+
 
 /** Desconecta y limpia el singleton */
 export function disconnectSocket(): void {
@@ -68,19 +107,19 @@ export function onNuevaOrden(cb: (venta: VentaResponse) => void): void {
   getSocket().on("nueva_orden", cb);
 }
 export function offNuevaOrden(cb: (venta: VentaResponse) => void): void {
-  getSocket().off("nueva_orden", cb); // ← se pasa cb, no se borra todo
+  socket?.off("nueva_orden", cb);
 }
 
 export function onOrdenActualizada(cb: (venta: VentaResponse) => void): void {
   getSocket().on("orden_actualizada", cb);
 }
 export function offOrdenActualizada(cb: (venta: VentaResponse) => void): void {
-  getSocket().off("orden_actualizada", cb); // ← ídem
+  socket?.off("orden_actualizada", cb);
 }
 
 export function onOrdenLista(cb: (data: { venta_id: number }) => void): void {
   getSocket().on("orden_lista", cb);
 }
 export function offOrdenLista(cb: (data: { venta_id: number }) => void): void {
-  getSocket().off("orden_lista", cb); // ← ídem
+  socket?.off("orden_lista", cb);
 }

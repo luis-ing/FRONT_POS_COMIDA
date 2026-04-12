@@ -17,19 +17,19 @@ import type { CartItem, SaleFlow, OpenOrderSummary } from "./catalog-view"
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CartPanelProps {
-  items:            CartItem[]
+  items: CartItem[]
   onUpdateQuantity: (id: number, quantity: number, enviadoACocina: boolean) => void
-  onClearCart:      () => void
-  saleFlow:         SaleFlow
-  currentOrderId:   number | null          // ahora es number (id real de BD)
-  onPayment:        () => void
-  onOpenOrder:      () => void
+  onClearCart: () => void
+  saleFlow: SaleFlow
+  currentOrderId: number | null          // ahora es number (id real de BD)
+  onPayment: () => void
+  onOpenOrder: () => void
   onAddToOpenOrder: () => void
-  onSendToKitchen:  () => void
-  onNewSale:        () => void
-  openOrders:       OpenOrderSummary[]     // tipo actualizado
-  onLoadOrder:      (ventaId: number) => void
-  submitting?:      boolean                // bloquea botones mientras hay llamadas en curso
+  onSendToKitchen: () => void
+  onNewSale: () => void
+  openOrders: OpenOrderSummary[]     // tipo actualizado
+  onLoadOrder: (ventaId: number) => void
+  submitting?: boolean                // bloquea botones mientras hay llamadas en curso
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -50,11 +50,11 @@ export function CartPanel({
 }: CartPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const subtotal     = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const pendingItems = items.filter(i => !i.enviadoACocina)
-  const sentItems    = items.filter(i => i.enviadoACocina)
-  const hasPending   = pendingItems.length > 0
-  const hasSent      = sentItems.length > 0
+  const sentItems = items.filter(i => i.enviadoACocina)
+  const hasPending = pendingItems.length > 0
+  const hasSent = sentItems.length > 0
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
@@ -89,9 +89,9 @@ export function CartPanel({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-2">
+          {/* <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-2">
             <Printer className="h-4 w-4" />
-          </Button>
+          </Button> */}
 
           {/* Dropdown de órdenes abiertas */}
           {openOrders.length > 0 && (
@@ -228,8 +228,8 @@ export function CartPanel({
               </div>
             )}
 
-          {/* Elemento invisible para scroll automático */}
-          <div ref={scrollRef} />
+            {/* Elemento invisible para scroll automático */}
+            <div ref={scrollRef} />
           </div>
         )}
       </ScrollArea>

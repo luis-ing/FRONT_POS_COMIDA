@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Grid3X3, List, SlidersHorizontal, FileText, Loader2 } from "lucide-react"
+import { Search, Grid3X3, List, SlidersHorizontal, FileText, Loader2, Wifi, WifiOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useSearchParams } from "next/navigation"
+import { cn } from "@/lib/utils"
 
 import { CategoryGrid } from "./category-grid"
 import { ProductGrid } from "./product-grid"
@@ -24,29 +25,39 @@ import {
   enviarACocina,
   cerrarOrden,
   getVenta,
+  getVentas,
 } from "@/services/venta_service"
+import {
+  getSocket,
+  onNuevaOrden,
+  offNuevaOrden,
+  onOrdenActualizada,
+  offOrdenActualizada,
+  onOrdenLista,
+  offOrdenLista,
+} from "@/services/socket_client"
 import type { ProductoResponse, CategoriaResponse, CanalVentaResponse, VentaResponse } from "@/types/schemas"
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
 
 export interface CartItem {
-  id:              number
-  name:            string
-  price:           number
-  quantity:        number
-  enviadoACocina:  boolean
+  id: number
+  name: string
+  price: number
+  quantity: number
+  enviadoACocina: boolean
   requiereCoccion: boolean
 }
 
-export type SaleFlow    = "flujo1" | "flujo2"
+export type SaleFlow = "flujo1" | "flujo2"
 export type OrderStatus = "ABIERTA" | "CERRADA"
 
 // Para el panel de órdenes abiertas en el cart (datos mínimos para el dropdown)
 export interface OpenOrderSummary {
-  id:         number   // id real de la venta en BD
-  label:      string   // ej: "#42"
-  total:      number
-  createdAt:  string   // ISO
+  id: number   // id real de la venta en BD
+  label: string   // ej: "#42"
+  total: number
+  createdAt: string   // ISO
 }
 
 // ─── IDs fijos de catálogo ────────────────────────────────────────────────────
@@ -59,25 +70,26 @@ export function CatalogView() {
   const searchParams = useSearchParams()
 
   // ── Datos del catálogo ────────────────────────────────────────────────────
-  const [productos,   setProductos]   = useState<ProductoResponse[]>([])
-  const [categorias,  setCategorias]  = useState<CategoriaResponse[]>([])
-  const [canales,     setCanales]     = useState<CanalVentaResponse[]>([])
+  const [productos, setProductos] = useState<ProductoResponse[]>([])
+  const [categorias, setCategorias] = useState<CategoriaResponse[]>([])
+  const [canales, setCanales] = useState<CanalVentaResponse[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
   // ── UI ────────────────────────────────────────────────────────────────────
-  const [searchQuery,      setSearchQuery]      = useState("")
-  const [viewMode,         setViewMode]         = useState<"grid" | "list">("grid")
-  const [saleFlow,         setSaleFlow]         = useState<SaleFlow>("flujo1")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [saleFlow, setSaleFlow] = useState<SaleFlow>("flujo1")
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
 
   // ── Carrito ───────────────────────────────────────────────────────────────
-  const [cartItems,      setCartItems]      = useState<CartItem[]>([])
-  const [isPaymentOpen,  setIsPaymentOpen]  = useState(false)
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
 
   // ── Orden activa (Flujo 2) ────────────────────────────────────────────────
-  const [currentVenta,  setCurrentVenta]  = useState<VentaResponse | null>(null)
-  const [openOrders,    setOpenOrders]    = useState<OpenOrderSummary[]>([])
-  const [submitting,    setSubmitting]    = useState(false)
+  const [currentVenta, setCurrentVenta] = useState<VentaResponse | null>(null)
+  const [openOrders, setOpenOrders] = useState<OpenOrderSummary[]>([])
+  const [connected, setConnected] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
   const fetchCatalog = useCallback(async () => {
@@ -110,11 +122,11 @@ export function CatalogView() {
         setCurrentVenta(venta)
         // Reconstruimos el carrito desde los detalles de la venta
         const items: CartItem[] = venta.detalleventa.map(d => ({
-          id:              d.idProducto,
-          name:            d.producto?.nombre ?? `Producto #${d.idProducto}`,
-          price:           Number(d.precioUnitario),
-          quantity:        d.cantidad,
-          enviadoACocina:  d.enviadoACocina,
+          id: d.idProducto,
+          name: d.producto?.nombre ?? `Producto #${d.idProducto}`,
+          price: Number(d.precioUnitario),
+          quantity: d.cantidad,
+          enviadoACocina: d.enviadoACocina,
           requiereCoccion: d.producto?.requiereCoccion ?? true,
         }))
         setCartItems(items)
@@ -130,6 +142,89 @@ export function CatalogView() {
     return canal.id
   }
 
+  const mapVentaToOpenOrder = (venta: VentaResponse): OpenOrderSummary => ({
+    id: venta.id,
+    label: `#${venta.id}`,
+    total: Number(venta.total),
+    createdAt: venta.fechaApertura,
+  })
+
+  const fetchOpenOrders = useCallback(async () => {
+    try {
+      const ventas = await getVentas({ idEstatusPago: 1 })
+      setOpenOrders(ventas.map(mapVentaToOpenOrder))
+    } catch {
+      toast.error("Error al cargar órdenes abiertas")
+    }
+  }, [mapVentaToOpenOrder])
+
+  useEffect(() => {
+    fetchOpenOrders()
+  }, [fetchOpenOrders])
+
+  const handleNuevaOrdenSocket = useCallback(async (venta: VentaResponse) => {
+    if (venta.idEstatusPago !== 1) {
+      setOpenOrders(prev => prev.filter(o => o.id !== venta.id))
+      return
+    }
+
+    setOpenOrders(prev =>
+      prev.some(o => o.id === venta.id)
+        ? prev
+        : [mapVentaToOpenOrder(venta), ...prev]
+    )
+  }, [mapVentaToOpenOrder])
+
+  const handleOrdenActualizadaSocket = useCallback(async (venta: VentaResponse) => {
+    if (venta.idEstatusPago !== 1) {
+      setOpenOrders(prev => prev.filter(o => o.id !== venta.id))
+      return
+    }
+
+    setOpenOrders(prev =>
+      prev.some(o => o.id === venta.id)
+        ? prev.map(o => o.id === venta.id ? mapVentaToOpenOrder(venta) : o)
+        : [mapVentaToOpenOrder(venta), ...prev]
+    )
+  }, [mapVentaToOpenOrder])
+
+  const handleOrdenListaSocket = useCallback(async ({ venta_id }: { venta_id: number }) => {
+    try {
+      const venta = await getVenta(venta_id)
+      if (venta.idEstatusPago !== 1) {
+        setOpenOrders(prev => prev.filter(o => o.id !== venta_id))
+        return
+      }
+      setOpenOrders(prev =>
+        prev.some(o => o.id === venta.id)
+          ? prev.map(o => o.id === venta.id ? mapVentaToOpenOrder(venta) : o)
+          : [mapVentaToOpenOrder(venta), ...prev]
+      )
+      toast.success(`Orden #${venta_id} está lista`)
+    } catch {
+      toast.success(`Orden #${venta_id} está lista`)
+    }
+  }, [mapVentaToOpenOrder])
+
+  useEffect(() => {
+    const socket = getSocket()
+    socket.on("connect", () => setConnected(true))
+    socket.on("disconnect", () => setConnected(false))
+    if (socket.connected) setConnected(true)
+
+    onNuevaOrden(handleNuevaOrdenSocket)
+    onOrdenActualizada(handleOrdenActualizadaSocket)
+    onOrdenLista(handleOrdenListaSocket)
+
+    return () => {
+      offNuevaOrden(handleNuevaOrdenSocket)
+      offOrdenActualizada(handleOrdenActualizadaSocket)
+      offOrdenLista(handleOrdenListaSocket)
+      socket.off("connect")
+      socket.off("disconnect")
+    }
+  }, [handleNuevaOrdenSocket, handleOrdenActualizadaSocket, handleOrdenListaSocket])
+
   // ── Agregar al carrito ────────────────────────────────────────────────────
   const addToCart = (producto: ProductoResponse) => {
     setCartItems(prev => {
@@ -142,11 +237,11 @@ export function CatalogView() {
         )
       }
       return [...prev, {
-        id:              producto.id,
-        name:            producto.nombre,
-        price:           Number(producto.precio),
-        quantity:        1,
-        enviadoACocina:  false,
+        id: producto.id,
+        name: producto.nombre,
+        price: Number(producto.precio),
+        quantity: 1,
+        enviadoACocina: false,
         requiereCoccion: producto.requiereCoccion,
       }]
     })
@@ -219,9 +314,9 @@ export function CatalogView() {
 
       // Agregamos al resumen de órdenes abiertas (dropdown)
       setOpenOrders(prev => [...prev, {
-        id:        ventaFinal.id,
-        label:     `#${ventaFinal.id}`,
-        total:     Number(ventaFinal.total),
+        id: ventaFinal.id,
+        label: `#${ventaFinal.id}`,
+        total: Number(ventaFinal.total),
         createdAt: ventaFinal.fechaApertura,
       }])
 
@@ -288,11 +383,11 @@ export function CatalogView() {
       const venta = await getVenta(ventaId)
       setCurrentVenta(venta)
       const items: CartItem[] = venta.detalleventa.map(d => ({
-        id:              d.idProducto,
-        name:            d.producto?.nombre ?? `Producto #${d.idProducto}`,
-        price:           Number(d.precioUnitario),
-        quantity:        d.cantidad,
-        enviadoACocina:  d.enviadoACocina,
+        id: d.idProducto,
+        name: d.producto?.nombre ?? `Producto #${d.idProducto}`,
+        price: Number(d.precioUnitario),
+        quantity: d.cantidad,
+        enviadoACocina: d.enviadoACocina,
         requiereCoccion: d.producto?.requiereCoccion ?? true,
       }))
       setCartItems(items)
@@ -389,32 +484,46 @@ export function CatalogView() {
             )}
           </div>
 
+
           {/* Vista */}
-          <div className="flex items-center gap-2 rounded-xl border-2 border-border p-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="icon"
-              className="h-9 w-9 rounded-lg"
-              onClick={() => setViewMode("grid")}
-            >
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="icon"
-              className="h-9 w-9 rounded-lg"
-              onClick={() => setViewMode("list")}
-            >
-              <List className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center gap-4">
+            <div className={cn(
+              "flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-medium",
+              connected
+                ? "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            )}>
+              {connected
+                ? <><Wifi className="h-4 w-4" /> En línea</>
+                : <><WifiOff className="h-4 w-4" /> Desconectado</>
+              }
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border-2 border-border p-1">
+              <Button
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                size="icon"
+                className="h-9 w-9 rounded-lg"
+                onClick={() => setViewMode("grid")}
+              >
+                <Grid3X3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "ghost"}
+                size="icon"
+                className="h-9 w-9 rounded-lg"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Categorías */}
         <CategoryGrid
           categories={categorias.map(c => ({
-            id:    c.id,
-            name:  c.nombre,
+            id: c.id,
+            name: c.nombre,
             count: productos.filter(p => p.idCategoria === c.id).length,
             color: c.color ?? "#6b7280",
           }))}
@@ -428,11 +537,11 @@ export function CatalogView() {
           <ScrollArea className="flex-1 min-h-0">
             <ProductGrid
               products={filteredProducts.map(p => ({
-                id:              p.id,
-                name:            p.nombre,
-                price:           Number(p.precio),
-                image:           null,
-                category:        p.categoria?.nombre ?? "",
+                id: p.id,
+                name: p.nombre,
+                price: Number(p.precio),
+                image: null,
+                category: p.categoria?.nombre ?? "",
                 requiereCoccion: p.requiereCoccion,
               }))}
               viewMode={viewMode}
