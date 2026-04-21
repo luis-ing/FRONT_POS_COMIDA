@@ -48,7 +48,7 @@ export interface ConfiguracionResponse {
   horariosAtencion: string | null;
   mensajeBienvenida: string | null;
   mensajeFueraHorario: string | null;
-  fechaActualizacion: string; // ISO 8601
+  fechaActualizacion: string;
 }
 
 export interface ConfiguracionUpdate {
@@ -66,8 +66,9 @@ export interface NegocioResponse {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
+  rutaInicial: string | null; // ← nuevo v5
   activo: boolean;
-  fechaCreacion: string; // ISO 8601
+  fechaCreacion: string;
 }
 
 export interface NegocioUpdate {
@@ -168,6 +169,7 @@ export interface ProductoCreate {
   precio: number;
   requiereCoccion?: boolean;
   idCategoria?: number;
+  // imagen se pasa como File separado al service, no en este objeto
 }
 
 export interface ProductoUpdate {
@@ -176,6 +178,7 @@ export interface ProductoUpdate {
   precio?: number;
   requiereCoccion?: boolean;
   idCategoria?: number;
+  // imagen se pasa como File separado al service, no en este objeto
 }
 
 export interface ProductoResponse {
@@ -185,6 +188,7 @@ export interface ProductoResponse {
   precio: number;
   activo: boolean;
   requiereCoccion: boolean;
+  imagenURL: string | null; // ← nuevo v5
   idCategoria: number | null;
   idNegocio: number;
   idusuarioCreador: number;
@@ -247,6 +251,10 @@ export interface AgregarProductosInput {
 
 export interface CerrarVentaInput {
   idMetodoPago: number;
+}
+
+export interface CancelarVentaInput {
+  motivo?: string; // ← nuevo v5
 }
 
 export interface EstatusOrdenUpdate {
