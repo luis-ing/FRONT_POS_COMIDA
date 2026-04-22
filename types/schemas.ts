@@ -36,6 +36,7 @@ export interface UserLogin {
 export interface UserLoginResponse {
   token: string;
   user: UsuarioResponse;
+  negocio: NegocioResponse;
 }
 
 // ─── Configuración ────────────────────────────────────────────────────────────

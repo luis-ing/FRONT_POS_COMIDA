@@ -4,16 +4,9 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useRouter, usePathname } from "next/navigation"
 import { login as apiLogin, onboarding as apiOnboarding } from "@/services/auth_service"
 import { disconnectSocket } from "@/services/socket_client"
-import type { UsuarioResponse } from "@/types/schemas"
+import type { UsuarioResponse, NegocioResponse } from "@/types/schemas"
 
 // ─── Tipos del contexto ───────────────────────────────────────────────────────
-
-export interface Negocio {
-  id: number
-  nombre: string
-  telefono: string
-  direccion: string
-}
 
 interface RegisterData {
   negocio: { nombre: string; telefono?: string; direccion?: string }
@@ -22,7 +15,7 @@ interface RegisterData {
 
 interface AuthContextType {
   user: UsuarioResponse | null
-  negocio: Negocio | null
+  negocio: NegocioResponse | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (correo: string, contrasena: string) => Promise<boolean>
@@ -39,7 +32,7 @@ const PUBLIC_ROUTES = ["/login", "/registro", "/recuperar-contrasena"]
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]           = useState<UsuarioResponse | null>(null)
-  const [negocio, setNegocio]     = useState<Negocio | null>(null)
+  const [negocio, setNegocio]     = useState<NegocioResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router   = useRouter()
   const pathname = usePathname()
@@ -77,20 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // apiLogin guarda el token en localStorage automáticamente (ver auth_service.ts)
       const res      = await apiLogin({ correo, contrasena })
       const userData = res.user
-
-      // El negocio mínimo se construye con el idNegocio del usuario.
-      // Si necesitas nombre/teléfono, haz un GET /configuracion después del login.
-      const negocioData: Negocio = {
-        id:        userData.idNegocio,
-        nombre:    "",
-        telefono:  "",
-        direccion: "",
-      }
+      console.log("[Auth] Login successful:", userData)
 
       setUser(userData)
-      setNegocio(negocioData)
+      setNegocio(res.negocio)
       localStorage.setItem("tienda_comida_user",    JSON.stringify(userData))
-      localStorage.setItem("tienda_comida_negocio", JSON.stringify(negocioData))
+      localStorage.setItem("tienda_comida_negocio", JSON.stringify(res.negocio))
       return true
     } catch (err) {
       console.error("[Auth] Login error:", err)
@@ -126,11 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fechaCreacion: new Date().toISOString(),
         rol:           null,
       }
-      const negocioData: Negocio = {
-        id:        res.negocio_id,
-        nombre:    data.negocio.nombre,
-        telefono:  data.negocio.telefono ?? "",
-        direccion: data.negocio.direccion ?? "",
+      const negocioData: NegocioResponse = {
+        id:            res.negocio_id,
+        nombre:        data.negocio.nombre,
+        telefono:      data.negocio.telefono ?? null,
+        direccion:     data.negocio.direccion ?? null,
+        rutaInicial:   null,
+        activo:        true,
+        fechaCreacion: new Date().toISOString(),
       }
 
       setUser(minimalUser)
