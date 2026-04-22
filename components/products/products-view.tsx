@@ -72,7 +72,7 @@ function ImagePicker({ currentImageUrl, file, onChange }: ImagePickerProps) {
     <div className="space-y-2">
       <Label>Imagen del producto</Label>
       <div
-        className="group relative flex h-40 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-muted/50"
+        className="group relative flex aspect-square w-40 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-muted/50"
         onClick={() => inputRef.current?.click()}
       >
         {!isDefaultImage ? (

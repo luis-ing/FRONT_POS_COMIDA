@@ -120,7 +120,7 @@ export function OrdersView() {
 
   // ── Filtrado local ────────────────────────────────────────────────────────
   const filtered = ventas.filter(v => {
-    const matchSearch = String(v.id).includes(searchQuery)
+    const matchSearch = String(v.numeroOrden).includes(searchQuery)
     const matchStatus = statusFilter === "all" || v.idEstatusOrden === parseInt(statusFilter)
     return matchSearch && matchStatus
   })
@@ -209,7 +209,7 @@ export function OrdersView() {
                 const nombreEstatus = getNombreEstatus(venta.idEstatusOrden)
                 return (
                   <TableRow key={venta.id} className="border-b border-border/50 hover:bg-muted/50">
-                    <TableCell className="font-medium">#{venta.id}</TableCell>
+                    <TableCell className="font-medium">#{venta.numeroOrden}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="rounded-lg border-2">
                         {getNombreCanal(venta.idCanalVenta)}
@@ -263,7 +263,7 @@ export function OrdersView() {
               Detalle de orden
               {selectedVenta && (
                 <span className="text-sm text-muted-foreground">
-                  Orden #{selectedVenta.id} · {getNombreEstatus(selectedVenta.idEstatusOrden).replace("_", " ")}
+                  Orden #{selectedVenta.numeroOrden} · {getNombreEstatus(selectedVenta.idEstatusOrden).replace("_", " ")}
                 </span>
               )}
             </DialogTitle>

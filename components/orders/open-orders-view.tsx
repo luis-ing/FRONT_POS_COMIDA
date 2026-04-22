@@ -170,12 +170,12 @@ export function OpenOrdersView() {
   }, [])
 
   const handleLista = useCallback(async ({ venta_id }: { venta_id: number }) => {
+    const ventaCompleta = await getVenta(venta_id)
     try {
-      const ventaCompleta = await getVenta(venta_id)
       setVentas(prev => prev.map(v => v.id === venta_id ? ventaCompleta : v))
-      toast.success(`¡Orden #${venta_id} está lista para cobrar!`)
+      toast.success(`¡Orden #${ventaCompleta.numeroOrden} está lista para cobrar!`)
     } catch {
-      toast.success(`¡Orden #${venta_id} está lista para cobrar!`)
+      toast.success(`¡Orden #${ventaCompleta.numeroOrden} está lista para cobrar!`)
     }
   }, [])
 
@@ -228,7 +228,7 @@ export function OpenOrdersView() {
     try {
       const closed = await cerrarOrden(ventaACobrar.id, { idMetodoPago })
       setVentas(prev => prev.filter(v => v.id !== closed.id))
-      toast.success(`Orden #${closed.id} cobrada exitosamente`)
+      toast.success(`Orden #${closed.numeroOrden} cobrada exitosamente`)
       setIsPaymentOpen(false)
       setIsDetailOpen(false)
       setVentaACobrar(null)
@@ -340,7 +340,7 @@ export function OpenOrdersView() {
                   {/* Header */}
                   <div className="mb-4 flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold text-foreground">#{venta.id}</h3>
+                      <h3 className="font-semibold text-foreground">#{venta.numeroOrden}</h3>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         {formatTime(venta.fechaApertura)} ({getElapsed(venta.fechaApertura)})
@@ -446,7 +446,7 @@ export function OpenOrdersView() {
             <DialogTitle className="flex items-center gap-2">
               {selectedVenta && (
                 <>
-                  Orden #{selectedVenta.id}
+                  Orden #{selectedVenta.numeroOrden}
                   <Badge
                     variant="outline"
                     className={cn("rounded-lg border-2", getStatusUI(selectedVenta.idEstatusOrden).color)}

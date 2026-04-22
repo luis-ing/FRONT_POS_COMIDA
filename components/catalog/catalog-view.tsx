@@ -144,7 +144,7 @@ export function CatalogView() {
 
   const mapVentaToOpenOrder = useCallback((venta: VentaResponse): OpenOrderSummary => ({
     id: venta.id,
-    label: `#${venta.id}`,
+    label: `#${venta.numeroOrden}`,
     total: Number(venta.total),
     createdAt: venta.fechaApertura,
   }), [])
@@ -320,7 +320,7 @@ export function CatalogView() {
         createdAt: ventaFinal.fechaApertura,
       }])
 
-      toast.success(`Orden #${ventaFinal.id} abierta y enviada a cocina`)
+      toast.success(`Orden #${ventaFinal.numeroOrden} abierta y enviada a cocina`)
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Error al abrir la orden")
     } finally {
@@ -368,7 +368,7 @@ export function CatalogView() {
       setCartItems([])
       setCurrentVenta(null)
       setOpenOrders(prev => prev.filter(o => o.id !== currentVenta.id))
-      toast.success(`Orden #${currentVenta.id} cerrada y cobrada`)
+      toast.success(`Orden #${currentVenta.numeroOrden} cerrada y cobrada`)
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? "Error al cerrar la orden")
       throw err
@@ -392,7 +392,7 @@ export function CatalogView() {
       }))
       setCartItems(items)
       setSaleFlow("flujo2")
-      toast.info(`Orden #${venta.id} cargada`)
+      toast.info(`Orden #${venta.numeroOrden} cargada`)
     } catch {
       toast.error("Error al cargar la orden")
     }

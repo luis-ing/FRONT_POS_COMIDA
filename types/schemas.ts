@@ -263,6 +263,7 @@ export interface EstatusOrdenUpdate {
 
 export interface VentaResponse {
   id: number;
+  numeroOrden: number;
   total: number;
   notas: string | null;
   idEstatusOrden: number;

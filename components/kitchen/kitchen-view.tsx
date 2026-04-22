@@ -50,7 +50,7 @@ export function KitchenView() {
 
       setOrdenes(prev => {
         if (prev.some(o => o.id === ventaCompleta.id)) return prev
-        toast.info(`Nueva orden #${ventaCompleta.id}`)
+        toast.info(`Nueva orden #${ventaCompleta.numeroOrden}`)
         return [ventaCompleta, ...prev]
       })
     } catch {
@@ -74,7 +74,7 @@ export function KitchenView() {
         if (existe) {
           return prev.map(o => o.id === ventaCompleta.id ? ventaCompleta : o)
         }
-        toast.info(`Nueva orden #${ventaCompleta.id}`)
+        toast.info(`Nueva orden #${ventaCompleta.numeroOrden}`)
         return [ventaCompleta, ...prev]
       })
     } catch {
@@ -118,12 +118,12 @@ export function KitchenView() {
     }
   }
 
-  const handleMarcarLista = async (ventaId: number) => {
+  const handleMarcarLista = async (ventaId: number, numeroOrden: number) => {
     setProcessingFor(ventaId, true)
     try {
       const updated = await marcarOrdenLista(ventaId)
       setOrdenes(prev => prev.filter(o => o.id !== updated.id))
-      toast.success(`Orden #${ventaId} marcada como lista`)
+      toast.success(`Orden #${numeroOrden} marcada como lista`)
     } catch {
       toast.error("Error al marcar orden como lista")
     } finally {
@@ -205,7 +205,7 @@ export function KitchenView() {
               <div className="flex items-center justify-between border-b-2 border-border p-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-foreground">#{orden.id}</span>
+                    <span className="font-bold text-foreground">#{orden.numeroOrden}</span>
                     <Badge
                       variant="outline"
                       className={cn(
@@ -269,7 +269,7 @@ export function KitchenView() {
                 ) : (
                   <Button
                     className="w-full rounded-xl"
-                    onClick={() => handleMarcarLista(orden.id)}
+                    onClick={() => handleMarcarLista(orden.id, orden.numeroOrden)}
                     disabled={processing[orden.id]}
                   >
                     {processing[orden.id]
