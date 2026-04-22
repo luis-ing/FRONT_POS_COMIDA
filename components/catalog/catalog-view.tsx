@@ -142,12 +142,12 @@ export function CatalogView() {
     return canal.id
   }
 
-  const mapVentaToOpenOrder = (venta: VentaResponse): OpenOrderSummary => ({
+  const mapVentaToOpenOrder = useCallback((venta: VentaResponse): OpenOrderSummary => ({
     id: venta.id,
     label: `#${venta.id}`,
     total: Number(venta.total),
     createdAt: venta.fechaApertura,
-  })
+  }), [])
 
   const fetchOpenOrders = useCallback(async () => {
     try {
@@ -540,7 +540,7 @@ export function CatalogView() {
                 id: p.id,
                 name: p.nombre,
                 price: Number(p.precio),
-                image: null,
+                image: p.imagenURL,
                 category: p.categoria?.nombre ?? "",
                 requiereCoccion: p.requiereCoccion,
               }))}
