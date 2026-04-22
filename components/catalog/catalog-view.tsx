@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Search, Grid3X3, List, SlidersHorizontal, FileText, Loader2, Wifi, WifiOff } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -67,6 +68,7 @@ const CANAL_MOSTRADOR_NOMBRE = "Mostrador"
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function CatalogView() {
+  const router = useRouter()
   const searchParams = useSearchParams()
 
   // ── Datos del catálogo ────────────────────────────────────────────────────
@@ -534,24 +536,43 @@ export function CatalogView() {
         {/* Productos */}
         <div className="mt-6 flex min-h-0 flex-1 flex-col">
           <h3 className="mb-4 text-lg font-medium">Productos</h3>
-          <ScrollArea className="flex-1 min-h-0">
-            <ProductGrid
-              products={filteredProducts.map(p => ({
-                id: p.id,
-                name: p.nombre,
-                price: Number(p.precio),
-                image: p.imagenURL,
-                category: p.categoria?.nombre ?? "",
-                requiereCoccion: p.requiereCoccion,
-              }))}
-              viewMode={viewMode}
-              onAddToCart={item => {
-                const prod = productos.find(p => p.id === item.id)
-                if (prod) addToCart(prod)
-              }}
-              cartItems={cartItems}
-            />
-          </ScrollArea>
+          {productos.length === 0 ? (
+            <button
+              onClick={() => router.push("/productos")}
+              className="flex flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/20 transition-all hover:border-primary/50 hover:bg-primary/5 cursor-pointer group"
+            >
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="rounded-xl bg-primary/10 p-4 transition-transform group-hover:scale-110 group-hover:bg-primary/20">
+                  <svg className="h-12 w-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m0 0h6M6 12a6 6 0 1112 0 6 6 0 01-12 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">¡Vamos a empezar! 🎉</p>
+                  <p className="text-sm text-muted-foreground">Haz clic aquí para agregar tus primeros productos</p>
+                </div>
+              </div>
+            </button>
+          ) : (
+            <ScrollArea className="flex-1 min-h-0">
+              <ProductGrid
+                products={filteredProducts.map(p => ({
+                  id: p.id,
+                  name: p.nombre,
+                  price: Number(p.precio),
+                  image: p.imagenURL,
+                  category: p.categoria?.nombre ?? "",
+                  requiereCoccion: p.requiereCoccion,
+                }))}
+                viewMode={viewMode}
+                onAddToCart={item => {
+                  const prod = productos.find(p => p.id === item.id)
+                  if (prod) addToCart(prod)
+                }}
+                cartItems={cartItems}
+              />
+            </ScrollArea>
+          )}
         </div>
       </div>
 
