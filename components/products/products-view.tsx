@@ -72,7 +72,7 @@ function ImagePicker({ currentImageUrl, file, onChange }: ImagePickerProps) {
     <div className="space-y-2">
       <Label>Imagen del producto</Label>
       <div
-        className="group relative flex aspect-square w-40 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-muted/50"
+        className="group relative flex aspect-square h-50 w-50 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-muted/50"
         onClick={() => inputRef.current?.click()}
       >
         {!isDefaultImage ? (
@@ -90,7 +90,7 @@ function ImagePicker({ currentImageUrl, file, onChange }: ImagePickerProps) {
             </div>
           </>
         ) : (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground p-6">
             <ImagePlus className="h-8 w-8" />
             <p className="text-sm">Haz clic para subir una imagen</p>
             <p className="text-xs">JPG, PNG, WEBP · máx. 5 MB</p>
@@ -303,71 +303,78 @@ export function ProductsView() {
 
           {/* Tabla */}
           <div className="flex-1 rounded-2xl border-2 border-border bg-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-b-2 border-border hover:bg-transparent">
-                  <TableHead className="w-[56px]" />
-                  <TableHead className="font-semibold">Producto</TableHead>
-                  <TableHead className="font-semibold">Categoría</TableHead>
-                  <TableHead className="font-semibold">Precio</TableHead>
-                  <TableHead className="font-semibold">Cocción</TableHead>
-                  <TableHead className="font-semibold">Estado</TableHead>
-                  <TableHead className="w-[50px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map(product => (
-                  <TableRow key={product.id} className="border-b border-border/50 hover:bg-muted/50">
-                    <TableCell className="py-2">
-                      <div className="relative h-10 w-10 overflow-hidden rounded-lg border border-border">
-                        {/* ProductImage usa unoptimized internamente → va directo al backend con ?token= */}
-                        <ProductImage src={product.imagenURL} alt={product.nombre} fill className="object-cover" />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{product.nombre}</p>
-                        {product.descripcion && <p className="text-sm text-muted-foreground line-clamp-1">{product.descripcion}</p>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {product.categoria ? (
-                        <Badge variant="outline" className="rounded-lg border-2" style={{ borderColor: product.categoria.color ?? undefined, backgroundColor: `${product.categoria.color}20`, color: product.categoria.color ?? undefined }}>
-                          {product.categoria.nombre}
-                        </Badge>
-                      ) : <span className="text-muted-foreground">-</span>}
-                    </TableCell>
-                    <TableCell className="font-medium">${Number(product.precio).toFixed(2)}</TableCell>
-                    <TableCell>
-                      {product.requiereCoccion ? (
-                        <Badge variant="outline" className="rounded-lg border-2 border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400">
-                          <ChefHat className="mr-1 h-3 w-3" /> Sí
-                        </Badge>
-                      ) : <span className="text-muted-foreground">No</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={product.activo ? "default" : "outline"} className="rounded-lg">
-                        {product.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-xl">
-                          <DropdownMenuItem onClick={() => openEditProduct(product)}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => handleDesactivarProducto(product.id)} disabled={!product.activo}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Desactivar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+            {filteredProducts.length === 0 ? (
+              <div className="flex min-h-60 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+                <p className="font-medium text-foreground">No se encontraron productos</p>
+                <p className="text-sm">Prueba otro término de búsqueda o crea un nuevo producto.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b-2 border-border hover:bg-transparent">
+                    <TableHead className="w-14" />
+                    <TableHead className="font-semibold">Producto</TableHead>
+                    <TableHead className="font-semibold">Categoría</TableHead>
+                    <TableHead className="font-semibold">Precio</TableHead>
+                    <TableHead className="font-semibold">Cocción</TableHead>
+                    <TableHead className="font-semibold">Estado</TableHead>
+                    <TableHead className="w-12.5" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map(product => (
+                    <TableRow key={product.id} className="border-b border-border/50 hover:bg-muted/50">
+                      <TableCell className="py-2">
+                        <div className="relative h-10 w-10 overflow-hidden rounded-lg border border-border">
+                          {/* ProductImage usa unoptimized internamente → va directo al backend con ?token= */}
+                          <ProductImage src={product.imagenURL} alt={product.nombre} fill className="object-cover" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{product.nombre}</p>
+                          {product.descripcion && <p className="text-sm text-muted-foreground line-clamp-1">{product.descripcion}</p>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {product.categoria ? (
+                          <Badge variant="outline" className="rounded-lg border-2" style={{ borderColor: product.categoria.color ?? undefined, backgroundColor: `${product.categoria.color}20`, color: product.categoria.color ?? undefined }}>
+                            {product.categoria.nombre}
+                          </Badge>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="font-medium">${Number(product.precio).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {product.requiereCoccion ? (
+                          <Badge variant="outline" className="rounded-lg border-2 border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                            <ChefHat className="mr-1 h-3 w-3" /> Sí
+                          </Badge>
+                        ) : <span className="text-muted-foreground">No</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={product.activo ? "default" : "outline"} className="rounded-lg">
+                          {product.activo ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl">
+                            <DropdownMenuItem onClick={() => openEditProduct(product)}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDesactivarProducto(product.id)} disabled={!product.activo}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Desactivar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </TabsContent>
 
@@ -415,33 +422,42 @@ export function ProductsView() {
             </Dialog>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {categorias.map(category => (
-              <div key={category.id} className="group relative rounded-2xl border-2 border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-lg">
-                <div className="absolute right-3 top-3">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-xl">
-                      <DropdownMenuItem onClick={() => openEditCategory(category)}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => handleDesactivarCategoria(category.id)} disabled={!category.activo}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Desactivar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="mb-4 h-14 w-14 rounded-xl" style={{ backgroundColor: category.color ?? undefined }} />
-                <h3 className="font-semibold text-foreground">{category.nombre}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-2">{category.descripcion || "Sin descripción"}</p>
-                <div className="mt-4 flex items-center justify-between">
-                  <Badge variant="outline" className="rounded-lg border-2">{productos.filter(p => p.idCategoria === category.id).length} productos</Badge>
-                  <Badge variant={category.activo ? "default" : "outline"} className="rounded-lg">{category.activo ? "Activa" : "Inactiva"}</Badge>
-                </div>
+          {categorias.length === 0 ? (
+            <div className="flex h-40 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-card text-center text-muted-foreground">
+              <div>
+                <p className="font-medium text-foreground">No se encontraron categorías</p>
+                <p className="text-sm">Crea una categoría para ordenar tus productos.</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {categorias.map(category => (
+                <div key={category.id} className="group relative rounded-2xl border-2 border-border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-lg">
+                  <div className="absolute right-3 top-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-xl">
+                        <DropdownMenuItem onClick={() => openEditCategory(category)}><Edit2 className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive" onClick={() => handleDesactivarCategoria(category.id)} disabled={!category.activo}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Desactivar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="mb-4 h-14 w-14 rounded-xl" style={{ backgroundColor: category.color ?? undefined }} />
+                  <h3 className="font-semibold text-foreground">{category.nombre}</h3>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{category.descripcion || "Sin descripción"}</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <Badge variant="outline" className="rounded-lg border-2">{productos.filter(p => p.idCategoria === category.id).length} productos</Badge>
+                    <Badge variant={category.activo ? "default" : "outline"} className="rounded-lg">{category.activo ? "Activa" : "Inactiva"}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
