@@ -153,14 +153,14 @@ export function SettingsView() {
       </div>
 
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className="mb-6 h-12 rounded-xl border-2 border-border bg-card p-1">
-          <TabsTrigger value="general" className="h-10 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+        <TabsList className="mb-6 h-9 rounded-xl border-2 border-border bg-muted/50 p-1">
+          <TabsTrigger value="general" className="h-7 rounded-lg gap-2">
             <Store className="mr-2 h-4 w-4" /> General
           </TabsTrigger>
-          <TabsTrigger value="whatsapp" className="h-10 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger value="whatsapp" className="h-7 rounded-lg gap-2">
             <MessageSquare className="mr-2 h-4 w-4" /> WhatsApp
           </TabsTrigger>
-          <TabsTrigger value="horarios" className="h-10 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger value="horarios" className="h-7 rounded-lg gap-2">
             <Clock className="mr-2 h-4 w-4" /> Horarios
           </TabsTrigger>
         </TabsList>

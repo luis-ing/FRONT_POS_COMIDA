@@ -15,6 +15,7 @@ import { ProductGrid } from "./product-grid"
 import { CartPanel } from "./cart-panel"
 import { PaymentModal } from "./payment-modal"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { getProductos } from "@/services/producto_service"
 import { getCategorias } from "@/services/categoria_service"
@@ -460,24 +461,16 @@ export function CatalogView() {
         {/* Selector de flujo */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex rounded-xl border-2 border-border bg-muted/50 p-1">
-              <Button
-                variant={saleFlow === "flujo1" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-lg"
-                onClick={() => { setSaleFlow("flujo1"); handleNewSale() }}
-              >
-                Cobro inmediato
-              </Button>
-              <Button
-                variant={saleFlow === "flujo2" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-lg"
-                onClick={() => setSaleFlow("flujo2")}
-              >
-                Orden abierta
-              </Button>
-            </div>
+            <Tabs defaultValue={saleFlow} onValueChange={value => setSaleFlow(value as SaleFlow)}>
+              <TabsList className="rounded-xl h-9 border-2 border-border bg-muted/50 p-1">
+                <TabsTrigger value="flujo1" className="rounded-lg gap-2 h-7">
+                  Cobro inmediato
+                </TabsTrigger>
+                <TabsTrigger value="flujo2" className="rounded-lg gap-2 h-7">
+                  Orden abierta
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             {openOrders.length > 0 && (
               <Badge variant="outline" className="rounded-lg border-2 border-primary/50 bg-primary/10 text-primary">
                 <FileText className="mr-1 h-3 w-3" />

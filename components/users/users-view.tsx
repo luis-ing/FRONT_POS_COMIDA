@@ -164,11 +164,11 @@ export function UsersView() {
       </div>
 
       <Tabs defaultValue="users" className="flex-1 flex flex-col">
-        <TabsList className="w-fit rounded-xl border-2 border-border bg-muted/50 p-1">
-          <TabsTrigger value="users" className="rounded-lg gap-2 data-[state=active]:bg-background">
+        <TabsList className="w-fit h-9 rounded-xl border-2 border-border bg-muted/50 p-1">
+          <TabsTrigger value="users" className="rounded-lg gap-2 h-7">
             <Users className="h-4 w-4" /> Usuarios
           </TabsTrigger>
-          <TabsTrigger value="roles" className="rounded-lg gap-2 data-[state=active]:bg-background">
+          <TabsTrigger value="roles" className="rounded-lg gap-2">
             <Shield className="h-4 w-4" /> Roles y Permisos
           </TabsTrigger>
         </TabsList>

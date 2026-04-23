@@ -209,9 +209,9 @@ export function ProductsView() {
       </div>
 
       <Tabs defaultValue="products" className="flex-1 flex flex-col">
-        <TabsList className="w-fit rounded-xl border-2 border-border bg-muted/50 p-1">
-          <TabsTrigger value="products"   className="rounded-lg gap-2 data-[state=active]:bg-background"><Package className="h-4 w-4" /> Productos</TabsTrigger>
-          <TabsTrigger value="categories" className="rounded-lg gap-2 data-[state=active]:bg-background"><Tag     className="h-4 w-4" /> Categorías</TabsTrigger>
+        <TabsList className="w-fit h-9 rounded-xl border-2 border-border bg-muted/50 p-1">
+          <TabsTrigger value="products"   className="rounded-lg gap-2 h-7"><Package className="h-4 w-4" /> Productos</TabsTrigger>
+          <TabsTrigger value="categories" className="rounded-lg gap-2 h-7"><Tag     className="h-4 w-4" /> Categorías</TabsTrigger>
         </TabsList>
 
         {/* ══ PRODUCTOS ══ */}
