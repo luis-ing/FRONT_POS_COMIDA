@@ -210,12 +210,12 @@ export function KitchenView() {
                       variant="outline"
                       className={cn(
                         "rounded-lg border-2",
-                        orden.idCanalVenta === 2 &&
+                        orden.idCanalVenta === 3 &&
                         "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
                       )}
                     >
-                      {orden.idCanalVenta === 2 && <MessageSquare className="mr-1 h-3 w-3" />}
-                      {orden.idCanalVenta === 2 ? "WhatsApp" : "Mostrador"}
+                      {orden.idCanalVenta === 3 && <MessageSquare className="mr-1 h-3 w-3" />}
+                      {orden.idCanalVenta === 3 ? "WhatsApp" : "Mostrador"}
                     </Badge>
                   </div>
                   {orden.notas && (
