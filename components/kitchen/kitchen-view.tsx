@@ -241,7 +241,8 @@ export function KitchenView() {
                         <div>
                           <p className={cn(
                             "font-medium text-foreground",
-                            !detalle.cocinado && "text-primary font-bold"
+                            !detalle.cocinado && "text-primary font-bold",
+                            detalle.cocinado && "line-through"
                           )}>
                             {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
                           </p>
