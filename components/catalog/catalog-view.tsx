@@ -165,7 +165,7 @@ export function CatalogView() {
 
   const fetchOpenOrders = useCallback(async () => {
     try {
-      const ventas = await getVentas({ idEstatusPago: 1 })
+      const ventas = await getVentas({ excluirPagadasCanceladas: true })
       setOpenOrders(ventas.map(mapVentaToOpenOrder))
     } catch {
       toast.error("Error al cargar órdenes abiertas")

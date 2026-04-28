@@ -15,6 +15,7 @@ interface ListVentasParams {
   idEstatusOrden?: number;
   desde?: string; // ISO 8601
   hasta?: string; // ISO 8601
+  excluirPagadasCanceladas?: boolean; // Si true, excluye ventas con estatus de pago "pagada" o "cancelada"
 }
 
 // ─── Consultas ────────────────────────────────────────────────────────────────
