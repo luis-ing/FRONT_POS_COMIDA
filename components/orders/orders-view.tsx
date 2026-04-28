@@ -29,6 +29,7 @@ import {
   estaDetalleCancelado,
   dentroDelLimiteCancelacion,
   esVentaDeHoy,
+  getCanceladoInfo,
 } from "@/lib/venta-utils"
 import type {
   VentaResponse, EstatusOrdenResponse, EstatusPagoResponse,
@@ -122,9 +123,12 @@ export function OrdersView() {
       day: "2-digit", month: "2-digit", year: "numeric",
     })
 
-  // Una venta es cancelable si no está ya CANCELADA
-  const esCancelable = (venta: VentaResponse) =>
-    getNombrePagoById(venta.idEstatusPago) !== ID_ESTATUS_PAGO_CANCELADA_NOMBRE
+  // Una venta es cancelable si no está ya CANCELADA (por pago o estatus)
+  const esCancelable = (venta: VentaResponse) => {
+    const pago = getNombrePagoById(venta.idEstatusPago)
+    const orden = getNombreEstatus(venta.idEstatusOrden)
+    return pago !== ID_ESTATUS_PAGO_CANCELADA_NOMBRE && orden !== "cancelada"
+  }
 
   // Una venta admite cancelación parcial solo si está ABIERTA
   const admiteCancelParcial = (venta: VentaResponse) =>
@@ -483,11 +487,20 @@ export function OrdersView() {
                               {admiteCancelParcial(selectedVenta) && !cancelado && !dentroDelLimiteCancelacion(selectedVenta) && (
                                 <p className="text-xs text-muted-foreground">No disponible (+2h)</p>
                               )}
-                              {cancelado && (
-                                <Badge variant="outline" className="rounded text-xs border-destructive/50 text-destructive">
-                                  Cancelado
-                                </Badge>
-                              )}
+                              {cancelado && (() => {
+                                const info = getCanceladoInfo(item);
+                                return info ? (
+                                  <div className="mt-1 text-xs text-destructive/80 leading-tight">
+                                    <span className="font-medium">Cancelado</span>
+                                    {info.usuarioNombre && (
+                                      <span className="font-normal"> por {info.usuarioNombre}</span>
+                                    )}
+                                    {info.motivo && (
+                                      <span className="italic"> - {info.motivo}</span>
+                                    )}
+                                  </div>
+                                ) : null;
+                              })()}
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 pt-2 text-sm text-muted-foreground">

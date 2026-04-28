@@ -33,8 +33,9 @@ import {
 import {
   estaDetalleCancelado,
   dentroDelLimiteCancelacion,
-  mensajeLimiteCancelacion,
   esVentaDeHoy,
+  getCanceladoInfo,
+  mensajeLimiteCancelacion,
 } from "@/lib/venta-utils"
 import type {
   VentaResponse, EstatusOrdenResponse, MetodoPagoResponse,
@@ -458,9 +459,20 @@ export function OpenOrdersView() {
                                   {d.producto?.nombre ?? `Producto #${d.idProducto}`}
                                 </span>
                                 {d.producto?.requiereCoccion && <ChefHat className="h-4 w-4 text-orange-500" />}
-                                {cancelado && (
-                                  <Badge variant="outline" className="rounded text-xs border-destructive/50 text-destructive">Cancelado</Badge>
-                                )}
+                                {cancelado && (() => {
+                                  const info = getCanceladoInfo(d);
+                                  return info ? (
+                                    <div className="mt-1 text-xs text-destructive/80 leading-tight">
+                                      <span className="font-medium">Cancelado</span>
+                                      {info.usuarioNombre && (
+                                        <span className="font-normal"> por {info.usuarioNombre}</span>
+                                      )}
+                                      {info.motivo && (
+                                        <span className="italic"> - {info.motivo}</span>
+                                      )}
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">${Number(d.subtotal).toFixed(2)}</span>

@@ -1,14 +1,41 @@
-import type { DetalleVentaResponse, VentaResponse } from "@/types/schemas"
+import type { DetalleVentaResponse, VentaResponse, DetalleVentaCancelacionInfo } from "@/types/schemas"
 
 /** Horas máximas permitidas para cancelar un producto de una orden */
 export const LIMITE_HORAS_CANCELACION_PARCIAL = 2
 
 /**
  * Devuelve true si el detalle tiene al menos un registro de cancelación.
- * El backend carga la relación `cancelacion` como array.
+ * Maneja ambos casos: backend puede enviar `cancelacion` (API GET) o `cancelado` (socket).
  */
-export function estaDetalleCancelado(detalle: DetalleVentaResponse): boolean {
-  return Array.isArray(detalle.cancelacion) && detalle.cancelacion.length > 0
+export function estaDetalleCancelado(detalle: any): boolean {
+  // Socket: cancelado es un objeto
+  if (detalle.cancelado && typeof detalle.cancelado === 'object') return true
+  // API GET: cancelacion es un array
+  if (Array.isArray(detalle.cancelacion) && detalle.cancelacion.length > 0) return true
+  return false
+}
+
+/**
+ * Obtiene la información de cancelación (quién y por qué).
+ * Maneja ambos formatos: `cancelado` (socket) y `cancelacion` (API GET).
+ */
+export function getCanceladoInfo(detalle: any): DetalleVentaCancelacionInfo | null {
+  // Socket payload: cancelado es objeto
+  if (detalle.cancelado && typeof detalle.cancelado === 'object') {
+    return detalle.cancelado as DetalleVentaCancelacionInfo
+  }
+  
+  // API GET payload: cancelacion es array
+  if (Array.isArray(detalle.cancelacion) && detalle.cancelacion.length > 0) {
+    const c = detalle.cancelacion[0]
+    return {
+      fechaCancelacion: c.fechaCancelacion,
+      motivo: c.motivo,
+      usuarioNombre: c.usuarioNombre,
+    }
+  }
+  
+  return null
 }
 
 /**

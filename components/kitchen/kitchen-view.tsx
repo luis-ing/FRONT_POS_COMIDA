@@ -18,7 +18,7 @@ import {
   onOrdenCancelada,
   offOrdenCancelada,
 } from "@/services/socket_client"
-import { estaDetalleCancelado } from "@/lib/venta-utils"
+import { estaDetalleCancelado, getCanceladoInfo } from "@/lib/venta-utils"
 import type { VentaResponse } from "@/types/schemas"
 
 export function KitchenView() {
@@ -293,9 +293,20 @@ export function KitchenView() {
                             )}>
                               {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
                             </p>
-                            {cancelado && (
-                              <span className="text-xs text-destructive font-medium">● Cancelado</span>
-                            )}
+                            {cancelado && (() => {
+                              const info = getCanceladoInfo(detalle);
+                              return info ? (
+                                <p className="text-xs text-destructive/80 mt-0.5 leading-tight">
+                                  <span className="font-medium">Cancelado</span>
+                                  {info.usuarioNombre && (
+                                    <span className="font-normal"> por {info.usuarioNombre}</span>
+                                  )}
+                                  {info.motivo && (
+                                    <span className="italic"> - {info.motivo}</span>
+                                  )}
+                                </p>
+                              ) : null;
+                            })()}
                             {!cancelado && !detalle.cocinado && (
                               <span className="text-xs text-primary">● Nuevo</span>
                             )}

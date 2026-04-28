@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useEffect, useRef } from "react"
+import { estaDetalleCancelado, getCanceladoInfo } from "@/lib/venta-utils"
 import type { CartItem, SaleFlow, OpenOrderSummary } from "./catalog-view"
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -216,23 +217,46 @@ export function CartPanel({
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Check className="h-4 w-4 text-primary" /> Enviado a cocina
                 </div>
-                {sentItems.map((item, idx) => (
+                {sentItems.map((item, idx) => {
+                  const cancelado = estaDetalleCancelado(item);
+                  const info = getCanceladoInfo(item);
+                  return (
                   <div
                     key={`sent-${item.id}-${idx}`}
-                    className="flex items-start justify-between rounded-xl border-2 border-border/50 bg-muted/30 p-3 opacity-70"
+                    className={cn(
+                      "flex items-start justify-between rounded-xl border-2 p-3",
+                      cancelado
+                        ? "opacity-60 border-destructive/30 bg-destructive/5"
+                        : "opacity-70"
+                    )}
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground">{item.name}</p>
+                        <p className={cn("font-medium", cancelado && "line-through text-destructive/70")}>
+                          {item.name}
+                        </p>
                         {item.requiereCoccion && <ChefHat className="h-4 w-4 text-orange-500" />}
                       </div>
-                      <span className="mt-1 block text-sm text-muted-foreground">x{item.quantity}</span>
+                      <span className={cn("mt-1 block text-sm text-muted-foreground", cancelado && "line-through text-destructive/70")}>
+                        x{item.quantity}
+                      </span>
+                      {cancelado && info && (
+                        <p className="text-xs text-destructive/80 mt-0.5 leading-tight">
+                          <span className="font-medium">Cancelado</span>
+                          {info.usuarioNombre && (
+                            <span className="font-normal"> por {info.usuarioNombre}</span>
+                          )}
+                          {info.motivo && (
+                            <span className="italic"> - {info.motivo}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                    <p className="font-semibold text-muted-foreground">
+                    <p className={cn("font-semibold", cancelado ? "line-through text-destructive/70" : "text-muted-foreground")}>
                       ${(item.price * item.quantity).toFixed(2)}
                     </p>
                   </div>
-                ))}
+                )})}
               </div>
             )}
 

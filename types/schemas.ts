@@ -225,6 +225,14 @@ export interface DetalleVentaCancelacionResponse {
   idUsuario: number;
   fechaCancelacion: string;
   motivo: string | null;
+  usuarioNombre?: string | null;
+}
+
+// Para socket (coincide con backend)
+export interface DetalleVentaCancelacionInfo {
+  fechaCancelacion: string;
+  motivo?: string | null;
+  usuarioNombre?: string | null;
 }
 
 export interface DetalleVentaResponse {
@@ -237,8 +245,10 @@ export interface DetalleVentaResponse {
   cocinado: boolean;
   fechaEnvio: string | null;
   producto: ProductoResponse | null;
-  /** Lista de cancelaciones del detalle — presente si el backend carga la relación */
+  /** Lista de cancelaciones del detalle — presente si el backend carga la relación (API GET) */
   cancelacion: DetalleVentaCancelacionResponse[];
+  /** Info de cancelación parcial (socket) — objeto o null */
+  cancelado?: DetalleVentaCancelacionInfo | null;
 }
 
 export interface VentaDirectaCreate {
