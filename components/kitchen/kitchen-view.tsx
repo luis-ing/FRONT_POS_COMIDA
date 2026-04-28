@@ -15,7 +15,10 @@ import {
   offNuevaOrden,
   onOrdenActualizada,
   offOrdenActualizada,
+  onOrdenCancelada,
+  offOrdenCancelada,
 } from "@/services/socket_client"
+import { estaDetalleCancelado } from "@/lib/venta-utils"
 import type { VentaResponse } from "@/types/schemas"
 
 export function KitchenView() {
@@ -36,9 +39,8 @@ export function KitchenView() {
     }
   }, [])
 
-  // ── Handlers de socket — definidos FUERA del useEffect ───────────────────
+  // ── Handlers de socket ────────────────────────────────────────────────────
   const handleNuevaOrden = useCallback(async (venta: VentaResponse) => {
-    console.log("[Socket] nueva_orden recibida:", venta.id)
     try {
       const ventaCompleta = await getVenta(venta.id)
 
@@ -59,13 +61,22 @@ export function KitchenView() {
   }, [])
 
   const handleOrdenActualizada = useCallback(async (venta: VentaResponse) => {
-    console.log("[Socket] orden_actualizada recibida:", venta.id)
     try {
       const ventaCompleta = await getVenta(venta.id)
 
+      // Si la orden pasó a cancelada, quitarla de cocina
+      // (aunque esto lo manejará handleOrdenCancelada, por si acaso)
+      const esCancelada = ventaCompleta.idEstatusOrden === 5 // nombre: "cancelada"
+      if (esCancelada) {
+        setOrdenes(prev => prev.filter(o => o.id !== ventaCompleta.id))
+        return
+      }
+
       const debeIgnorar =
         ventaCompleta.detalleventa?.length > 0 &&
-        ventaCompleta.detalleventa.every(d => d.producto?.requiereCoccion === false)
+        ventaCompleta.detalleventa
+          .filter(d => !estaDetalleCancelado(d))
+          .every(d => d.producto?.requiereCoccion === false)
 
       if (debeIgnorar) return
 
@@ -82,6 +93,25 @@ export function KitchenView() {
     }
   }, [])
 
+  // Cuando se cancela una orden total → quitarla de la lista de cocina con animación
+  const handleOrdenCancelada = useCallback(({ venta_id }: { venta_id: number }) => {
+    setOrdenes(prev => {
+      const orden = prev.find(o => o.id === venta_id)
+      if (orden) {
+        toast.info(`Orden #${orden.numeroOrden} cancelada`)
+      }
+      // Marcamos para animación de salida
+      setOrdenesAnimando(prevAnim => [...prevAnim, venta_id])
+      setTimeout(() => {
+        setOrdenes(prev => prev.filter(o => o.id !== venta_id))
+        setOrdenesAnimando(prevAnim => prevAnim.filter(id => id !== venta_id))
+      }, 300)
+      return prev
+    })
+  }, [])
+
+  const [ordenesAnimando, setOrdenesAnimando] = useState<number[]>([])
+
   // ── WebSockets ────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchActivas()
@@ -93,14 +123,16 @@ export function KitchenView() {
 
     onNuevaOrden(handleNuevaOrden)
     onOrdenActualizada(handleOrdenActualizada)
+    onOrdenCancelada(handleOrdenCancelada)
 
     return () => {
       offNuevaOrden(handleNuevaOrden)
       offOrdenActualizada(handleOrdenActualizada)
+      offOrdenCancelada(handleOrdenCancelada)
       socket.off("connect")
       socket.off("disconnect")
     }
-  }, [fetchActivas, handleNuevaOrden, handleOrdenActualizada])
+  }, [fetchActivas, handleNuevaOrden, handleOrdenActualizada, handleOrdenCancelada])
 
   // ── Acciones ──────────────────────────────────────────────────────────────
   const setProcessingFor = (id: number, value: boolean) =>
@@ -132,10 +164,10 @@ export function KitchenView() {
   }
 
   // ── Helpers de UI ─────────────────────────────────────────────────────────
-  const isPendiente = (o: VentaResponse) => o.idEstatusOrden === 1
+  const isPendiente     = (o: VentaResponse) => o.idEstatusOrden === 1
   const isEnPreparacion = (o: VentaResponse) => o.idEstatusOrden === 2
 
-  const pendingCount = ordenes.filter(isPendiente).length
+  const pendingCount   = ordenes.filter(isPendiente).length
   const preparingCount = ordenes.filter(isEnPreparacion).length
 
   const getHora = (o: VentaResponse) =>
@@ -195,10 +227,11 @@ export function KitchenView() {
             <div
               key={orden.id}
               className={cn(
-                "flex flex-col rounded-2xl border-2 bg-card transition-all",
+                "flex flex-col rounded-2xl border-2 bg-card transition-all duration-300",
                 isEnPreparacion(orden)
                   ? "border-primary shadow-lg shadow-primary/10"
-                  : "border-border"
+                  : "border-border",
+                ordenesAnimando.includes(orden.id) && "opacity-0 translate-x-full"
               )}
             >
               {/* Cabecera */}
@@ -218,6 +251,10 @@ export function KitchenView() {
                       {orden.idCanalVenta === 3 ? "WhatsApp" : "Mostrador"}
                     </Badge>
                   </div>
+                  {/* Alias del cliente si existe */}
+                  {orden.aliasCliente && (
+                    <p className="mt-0.5 text-sm font-medium text-primary">{orden.aliasCliente}</p>
+                  )}
                   {orden.notas && (
                     <p className="mt-1 text-xs text-muted-foreground italic">"{orden.notas}"</p>
                   )}
@@ -233,25 +270,39 @@ export function KitchenView() {
                 <ul className="space-y-2">
                   {orden.detalleventa
                     ?.filter(d => d.producto?.requiereCoccion)
-                    .map(detalle => (
-                      <li key={detalle.id} className="flex items-start gap-2">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-muted text-sm font-bold">
-                          {detalle.cantidad}
-                        </span>
-                        <div>
-                          <p className={cn(
-                            "font-medium text-foreground",
-                            !detalle.cocinado && "text-primary font-bold",
-                            detalle.cocinado && "line-through"
+                    .map(detalle => {
+                      const cancelado = estaDetalleCancelado(detalle)
+                      return (
+                        <li key={detalle.id} className="flex items-start gap-2">
+                          <span className={cn(
+                            "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-sm font-bold",
+                            cancelado
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-muted"
                           )}>
-                            {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
-                          </p>
-                          {!detalle.cocinado && (
-                            <span className="text-xs text-primary">● Nuevo</span>
-                          )}
-                        </div>
-                      </li>
-                    ))}
+                            {detalle.cantidad}
+                          </span>
+                          <div className="flex-1">
+                            <p className={cn(
+                              "font-medium",
+                              cancelado
+                                ? "line-through text-destructive/70"
+                                : !detalle.cocinado
+                                  ? "text-primary font-bold"
+                                  : "text-muted-foreground line-through"
+                            )}>
+                              {detalle.producto?.nombre ?? `Producto #${detalle.idProducto}`}
+                            </p>
+                            {cancelado && (
+                              <span className="text-xs text-destructive font-medium">● Cancelado</span>
+                            )}
+                            {!cancelado && !detalle.cocinado && (
+                              <span className="text-xs text-primary">● Nuevo</span>
+                            )}
+                          </div>
+                        </li>
+                      )
+                    })}
                 </ul>
               </div>
 

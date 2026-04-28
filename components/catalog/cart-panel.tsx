@@ -1,10 +1,13 @@
 "use client"
 
 import {
-  Minus, Plus, Printer, Save, Trash2, ArrowRight,
-  ChefHat, FileText, RotateCcw, Clock, Check, Loader2,
+  Minus, Plus, Trash2, ArrowRight,
+  ChefHat, FileText, RotateCcw, Clock, Check, Loader2, User, MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -21,15 +24,20 @@ interface CartPanelProps {
   onUpdateQuantity: (id: number, quantity: number, enviadoACocina: boolean) => void
   onClearCart: () => void
   saleFlow: SaleFlow
-  currentOrderId: number | null          // ahora es number (id real de BD)
+  currentOrderId: number | null
   onPayment: () => void
   onOpenOrder: () => void
   onAddToOpenOrder: () => void
   onSendToKitchen: () => void
   onNewSale: () => void
-  openOrders: OpenOrderSummary[]     // tipo actualizado
+  openOrders: OpenOrderSummary[]
   onLoadOrder: (ventaId: number) => void
-  submitting?: boolean                // bloquea botones mientras hay llamadas en curso
+  submitting?: boolean
+  // ── Alias y notas ─────────────────────────────────────────────────────────
+  aliasCliente: string
+  notas: string
+  onAliasChange: (value: string) => void
+  onNotasChange: (value: string) => void
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -47,6 +55,10 @@ export function CartPanel({
   openOrders,
   onLoadOrder,
   submitting = false,
+  aliasCliente,
+  notas,
+  onAliasChange,
+  onNotasChange,
 }: CartPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -56,13 +68,17 @@ export function CartPanel({
   const hasPending = pendingItems.length > 0
   const hasSent = sentItems.length > 0
 
+  // Los campos de alias/notas son editables cuando:
+  // 1. No hay orden activa aún (flujo 1 o flujo 2 sin orden abierta), o
+  // 2. Hay orden activa Y hay items pendientes de enviar a cocina (se aprovecha esa acción para actualizar)
+  const metadataEditable = !currentOrderId || (!!currentOrderId && hasPending)
+
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
 
-  // Scroll automático hacia abajo cuando se agregue un producto
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      scrollRef.current.scrollIntoView({ behavior: "smooth", block: "end" })
     }
   }, [items.length])
 
@@ -89,10 +105,6 @@ export function CartPanel({
         </div>
 
         <div className="flex gap-2">
-          {/* <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-2">
-            <Printer className="h-4 w-4" />
-          </Button> */}
-
           {/* Dropdown de órdenes abiertas */}
           {openOrders.length > 0 && (
             <DropdownMenu>
@@ -139,6 +151,53 @@ export function CartPanel({
           >
             <RotateCcw className="h-4 w-4" />
           </Button>
+        </div>
+      </div>
+
+      {/* Alias y notas — siempre visibles, editables según estado */}
+      <div className="border-b-2 border-border px-4 py-3 space-y-3">
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <User className="h-3.5 w-3.5" />
+            Cliente / Mesa
+          </Label>
+          <Input
+            placeholder="Ej: Mesa 4, Juan, WhatsApp..."
+            value={aliasCliente}
+            onChange={e => onAliasChange(e.target.value)}
+            disabled={!metadataEditable || submitting}
+            className={cn(
+              "h-8 rounded-lg border-2 text-sm",
+              !metadataEditable && "opacity-50 cursor-not-allowed"
+            )}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Notas
+          </Label>
+          <Textarea
+            placeholder="Instrucciones especiales, alergias..."
+            value={notas}
+            onChange={e => onNotasChange(e.target.value)}
+            disabled={!metadataEditable || submitting}
+            rows={2}
+            className={cn(
+              "rounded-lg border-2 text-sm resize-none",
+              !metadataEditable && "opacity-50 cursor-not-allowed"
+            )}
+          />
+          {currentOrderId && hasPending && (
+            <p className="text-xs text-primary">
+              ✏️ Los cambios se guardarán al enviar a cocina
+            </p>
+          )}
+          {currentOrderId && !hasPending && (
+            <p className="text-xs text-muted-foreground">
+              Agrega productos para poder editar estos campos
+            </p>
+          )}
         </div>
       </div>
 
@@ -228,7 +287,6 @@ export function CartPanel({
               </div>
             )}
 
-            {/* Elemento invisible para scroll automático */}
             <div ref={scrollRef} />
           </div>
         )}
@@ -257,9 +315,7 @@ export function CartPanel({
               disabled={items.length === 0 || submitting}
               onClick={onPayment}
             >
-              {submitting
-                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                : null}
+              {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Cobrar ${subtotal.toFixed(2)}
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -270,7 +326,6 @@ export function CartPanel({
         {saleFlow === "flujo2" && (
           <>
             {!currentOrderId ? (
-              // Sin orden activa → abrir
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -288,12 +343,11 @@ export function CartPanel({
                 >
                   {submitting
                     ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    : <Save className="mr-2 h-4 w-4" />}
+                    : <FileText className="mr-2 h-4 w-4" />}
                   Abrir orden
                 </Button>
               </div>
             ) : (
-              // Con orden activa → enviar más productos o cobrar
               <>
                 {hasPending && (
                   <Button
@@ -313,9 +367,7 @@ export function CartPanel({
                   disabled={hasPending || submitting}
                   onClick={onPayment}
                 >
-                  {submitting
-                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    : null}
+                  {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {hasPending
                     ? "Envía a cocina antes de cobrar"
                     : <>Cerrar y cobrar ${subtotal.toFixed(2)} <ArrowRight className="ml-2 h-5 w-5" /></>}

@@ -6,6 +6,8 @@ import type {
   CerrarVentaInput,
   EstatusOrdenUpdate,
   VentaResponse,
+  CancelarVentaInput,
+  CancelarProductoInput,
 } from "@/types/schemas";
 
 interface ListVentasParams {
@@ -112,6 +114,40 @@ export async function updateEstatusOrden(
 ): Promise<VentaResponse> {
   const res = await api.patch<VentaResponse>(
     `/ventas/${ventaId}/estatus-orden`,
+    data
+  );
+  return res.data;
+}
+
+// ─── Cancelaciones ────────────────────────────────────────────────────────────
+
+/**
+ * POST /ventas/:id/cancelar
+ * Cancela la venta completa.
+ * - ABIERTA → cancela directamente.
+ * - CERRADA → cancela con prefijo [REEMBOLSO] en notas.
+ * Emite socket 'orden_cancelada'.
+ */
+export async function cancelarVenta(
+  ventaId: number,
+  data: CancelarVentaInput
+): Promise<VentaResponse> {
+  const res = await api.post<VentaResponse>(`/ventas/${ventaId}/cancelar`, data);
+  return res.data;
+}
+
+/**
+ * POST /ventas/:id/cancelar-producto
+ * Cancela una línea de producto dentro de una venta ABIERTA.
+ * Resta el subtotal del total de la venta.
+ * Emite socket 'orden_actualizada'.
+ */
+export async function cancelarProducto(
+  ventaId: number,
+  data: CancelarProductoInput
+): Promise<VentaResponse> {
+  const res = await api.post<VentaResponse>(
+    `/ventas/${ventaId}/cancelar-producto`,
     data
   );
   return res.data;

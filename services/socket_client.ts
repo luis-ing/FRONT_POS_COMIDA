@@ -6,13 +6,13 @@ import type { VentaResponse } from "@/types/schemas";
 interface ServerToClientEvents {
   nueva_orden: (venta: VentaResponse) => void;
   orden_actualizada: (venta: VentaResponse) => void;
-  /** * CORRECCIÓN: El backend solo envía el ID de la venta, no el objeto completo
-   */
-  orden_lista: (data: { venta_id: number }) => void; 
+  /** El backend solo envía el ID de la venta, no el objeto completo */
+  orden_lista: (data: { venta_id: number }) => void;
+  /** Emitido cuando una venta es cancelada (total) */
+  orden_cancelada: (data: { venta_id: number }) => void;
 }
 
 interface ClientToServerEvents {
-  // Ya no es necesario si lo enviamos en el auth de la conexión
   join_negocio: (negocioId: number) => void;
 }
 
@@ -39,10 +39,11 @@ function getSocketUrl(): string {
 export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> {
   if (socket) return socket;
 
-  // Obtenemos los datos de localStorage
-  const token = typeof window !== "undefined" ? localStorage.getItem("tienda_comida_token") : null;
-  const negocioRaw = typeof window !== "undefined" ? localStorage.getItem("tienda_comida_negocio") : null;
-  
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("tienda_comida_token") : null;
+  const negocioRaw =
+    typeof window !== "undefined" ? localStorage.getItem("tienda_comida_negocio") : null;
+
   let negocioId: number | null = null;
   if (negocioRaw) {
     try {
@@ -58,16 +59,16 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 
   socket = io(socketUrl, {
     path: "/socket.io",
-    auth: { 
-      token, 
+    auth: {
+      token,
       negocio_id: negocioId,
     },
     transports: ["websocket", "polling"],
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 5, // Limitar a 5 intentos en lugar de infinito
-    reconnectionDelay: 2000, // Aumentar delay inicial
-    reconnectionDelayMax: 10000, // Máximo delay
+    reconnectionAttempts: 5,
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
     timeout: 10000,
   });
 
@@ -93,7 +94,6 @@ export function getSocket(): Socket<ServerToClientEvents, ClientToServerEvents> 
 
   return socket;
 }
-
 
 /** Desconecta y limpia el singleton */
 export function disconnectSocket(): void {
@@ -122,4 +122,11 @@ export function onOrdenLista(cb: (data: { venta_id: number }) => void): void {
 }
 export function offOrdenLista(cb: (data: { venta_id: number }) => void): void {
   socket?.off("orden_lista", cb);
+}
+
+export function onOrdenCancelada(cb: (data: { venta_id: number }) => void): void {
+  getSocket().on("orden_cancelada", cb);
+}
+export function offOrdenCancelada(cb: (data: { venta_id: number }) => void): void {
+  socket?.off("orden_cancelada", cb);
 }

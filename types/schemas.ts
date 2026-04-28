@@ -67,7 +67,7 @@ export interface NegocioResponse {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
-  rutaInicial: string | null; // ← nuevo v5
+  rutaInicial: string | null;
   activo: boolean;
   fechaCreacion: string;
 }
@@ -170,7 +170,6 @@ export interface ProductoCreate {
   precio: number;
   requiereCoccion?: boolean;
   idCategoria?: number;
-  // imagen se pasa como File separado al service, no en este objeto
 }
 
 export interface ProductoUpdate {
@@ -179,7 +178,6 @@ export interface ProductoUpdate {
   precio?: number;
   requiereCoccion?: boolean;
   idCategoria?: number;
-  // imagen se pasa como File separado al service, no en este objeto
 }
 
 export interface ProductoResponse {
@@ -189,7 +187,7 @@ export interface ProductoResponse {
   precio: number;
   activo: boolean;
   requiereCoccion: boolean;
-  imagenURL: string | null; // ← nuevo v5
+  imagenURL: string | null;
   idCategoria: number | null;
   idNegocio: number;
   idusuarioCreador: number;
@@ -220,6 +218,15 @@ export interface ProductoLineaInput {
   cantidad: number;
 }
 
+// Representa un registro de cancelación de línea de detalle
+export interface DetalleVentaCancelacionResponse {
+  id: number;
+  idDetalleVenta: number;
+  idUsuario: number;
+  fechaCancelacion: string;
+  motivo: string | null;
+}
+
 export interface DetalleVentaResponse {
   id: number;
   idProducto: number;
@@ -230,6 +237,8 @@ export interface DetalleVentaResponse {
   cocinado: boolean;
   fechaEnvio: string | null;
   producto: ProductoResponse | null;
+  /** Lista de cancelaciones del detalle — presente si el backend carga la relación */
+  cancelacion: DetalleVentaCancelacionResponse[];
 }
 
 export interface VentaDirectaCreate {
@@ -237,6 +246,7 @@ export interface VentaDirectaCreate {
   idCanalVenta: number;
   idCliente?: number;
   notas?: string;
+  aliasCliente?: string;
   productos: ProductoLineaInput[];
 }
 
@@ -244,6 +254,7 @@ export interface VentaAbrirCreate {
   idCanalVenta: number;
   idCliente?: number;
   notas?: string;
+  aliasCliente?: string;
 }
 
 export interface AgregarProductosInput {
@@ -255,11 +266,29 @@ export interface CerrarVentaInput {
 }
 
 export interface CancelarVentaInput {
-  motivo?: string; // ← nuevo v5
+  motivo?: string;
+}
+
+export interface CancelarProductoInput {
+  idDetalleVenta: number;
+  /** Motivo obligatorio en cancelación parcial */
+  motivo: string;
 }
 
 export interface EstatusOrdenUpdate {
   idEstatusOrden: number;
+}
+
+// Registro de cancelación total de una venta
+export interface CancelacionVentaResponse {
+  id: number;
+  idVenta: number;
+  idUsuario: number;
+  fechaCancelacion: string;
+  motivo: string | null;
+  montoReembolso: number;
+  tipoCancelacion: string;
+  estadoReembolso: string;
 }
 
 export interface VentaResponse {
@@ -267,6 +296,8 @@ export interface VentaResponse {
   numeroOrden: number;
   total: number;
   notas: string | null;
+  /** Alias o identificador libre del cliente (ej: "Mesa 4", "Juan") */
+  aliasCliente: string | null;
   idEstatusOrden: number;
   idEstatusPago: number;
   idNegocio: number;

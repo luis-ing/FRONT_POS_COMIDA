@@ -14,6 +14,7 @@ import { CategoryGrid } from "./category-grid"
 import { ProductGrid } from "./product-grid"
 import { CartPanel } from "./cart-panel"
 import { PaymentModal } from "./payment-modal"
+import { CancelModal } from "./cancel-modal"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -28,6 +29,7 @@ import {
   cerrarOrden,
   getVenta,
   getVentas,
+  cancelarVenta,
 } from "@/services/venta_service"
 import {
   getSocket,
@@ -37,7 +39,10 @@ import {
   offOrdenActualizada,
   onOrdenLista,
   offOrdenLista,
+  onOrdenCancelada,
+  offOrdenCancelada,
 } from "@/services/socket_client"
+import { esVentaDeHoy } from "@/lib/venta-utils"
 import type { ProductoResponse, CategoriaResponse, CanalVentaResponse, VentaResponse } from "@/types/schemas"
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -54,16 +59,13 @@ export interface CartItem {
 export type SaleFlow = "flujo1" | "flujo2"
 export type OrderStatus = "ABIERTA" | "CERRADA"
 
-// Para el panel de órdenes abiertas en el cart (datos mínimos para el dropdown)
 export interface OpenOrderSummary {
-  id: number   // id real de la venta en BD
-  label: string   // ej: "#42"
+  id: number
+  label: string
   total: number
-  createdAt: string   // ISO
+  createdAt: string
 }
 
-// ─── IDs fijos de catálogo ────────────────────────────────────────────────────
-// Ajusta estos valores si tu BD usa IDs distintos
 const CANAL_MOSTRADOR_NOMBRE = "Mostrador"
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -87,6 +89,14 @@ export function CatalogView() {
   // ── Carrito ───────────────────────────────────────────────────────────────
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+
+  // ── Metadata de venta ─────────────────────────────────────────────────────
+  const [aliasCliente, setAliasCliente] = useState("")
+  const [notas, setNotas] = useState("")
+
+  // ── Cancelación ───────────────────────────────────────────────────────────
+  const [isCancelOpen, setIsCancelOpen] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   // ── Orden activa (Flujo 2) ────────────────────────────────────────────────
   const [currentVenta, setCurrentVenta] = useState<VentaResponse | null>(null)
@@ -123,7 +133,8 @@ export function CatalogView() {
     getVenta(parseInt(ordenId))
       .then(venta => {
         setCurrentVenta(venta)
-        // Reconstruimos el carrito desde los detalles de la venta
+        setAliasCliente(venta.aliasCliente ?? "")
+        setNotas(venta.notas ?? "")
         const items: CartItem[] = venta.detalleventa.map(d => ({
           id: d.idProducto,
           name: d.producto?.nombre ?? `Producto #${d.idProducto}`,
@@ -170,7 +181,6 @@ export function CatalogView() {
       setOpenOrders(prev => prev.filter(o => o.id !== venta.id))
       return
     }
-
     setOpenOrders(prev =>
       prev.some(o => o.id === venta.id)
         ? prev
@@ -183,7 +193,6 @@ export function CatalogView() {
       setOpenOrders(prev => prev.filter(o => o.id !== venta.id))
       return
     }
-
     setOpenOrders(prev =>
       prev.some(o => o.id === venta.id)
         ? prev.map(o => o.id === venta.id ? mapVentaToOpenOrder(venta) : o)
@@ -209,6 +218,22 @@ export function CatalogView() {
     }
   }, [mapVentaToOpenOrder])
 
+  // Cuando llega socket de cancelación, quitamos la orden del dropdown si corresponde
+  const handleOrdenCanceladaSocket = useCallback(({ venta_id }: { venta_id: number }) => {
+    setOpenOrders(prev => prev.filter(o => o.id !== venta_id))
+    // Si la orden cancelada es la que tenemos activa en pantalla, reseteamos
+    setCurrentVenta(prev => {
+      if (prev?.id === venta_id) {
+        setCartItems([])
+        setAliasCliente("")
+        setNotas("")
+        toast.info("La orden activa fue cancelada")
+        return null
+      }
+      return prev
+    })
+  }, [])
+
   useEffect(() => {
     const socket = getSocket()
     socket.on("connect", () => setConnected(true))
@@ -218,15 +243,17 @@ export function CatalogView() {
     onNuevaOrden(handleNuevaOrdenSocket)
     onOrdenActualizada(handleOrdenActualizadaSocket)
     onOrdenLista(handleOrdenListaSocket)
+    onOrdenCancelada(handleOrdenCanceladaSocket)
 
     return () => {
       offNuevaOrden(handleNuevaOrdenSocket)
       offOrdenActualizada(handleOrdenActualizadaSocket)
       offOrdenLista(handleOrdenListaSocket)
+      offOrdenCancelada(handleOrdenCanceladaSocket)
       socket.off("connect")
       socket.off("disconnect")
     }
-  }, [handleNuevaOrdenSocket, handleOrdenActualizadaSocket, handleOrdenListaSocket])
+  }, [handleNuevaOrdenSocket, handleOrdenActualizadaSocket, handleOrdenListaSocket, handleOrdenCanceladaSocket])
 
   // ── Agregar al carrito ────────────────────────────────────────────────────
   const addToCart = (producto: ProductoResponse) => {
@@ -270,8 +297,6 @@ export function CatalogView() {
     items.map(i => ({ idProducto: i.id, cantidad: i.quantity }))
 
   // ── FLUJO 1: Cobro inmediato ──────────────────────────────────────────────
-  // El modal de pago llama a onConfirmPayment con el idMetodoPago elegido.
-  // Aquí hacemos la llamada real al backend.
   const handleConfirmPaymentFlujo1 = async (idMetodoPago: number) => {
     setSubmitting(true)
     try {
@@ -279,14 +304,18 @@ export function CatalogView() {
       await crearVentaDirecta({
         idMetodoPago,
         idCanalVenta,
+        aliasCliente: aliasCliente.trim() || undefined,
+        notas: notas.trim() || undefined,
         productos: buildProductosPayload(cartItems),
       })
       setCartItems([])
+      setAliasCliente("")
+      setNotas("")
       toast.success("Venta registrada correctamente")
     } catch (err: any) {
       const msg = err?.response?.data?.detail ?? "Error al registrar la venta"
       toast.error(msg)
-      throw err // Re-lanzamos para que PaymentModal no muestre éxito
+      throw err
     } finally {
       setSubmitting(false)
     }
@@ -299,26 +328,24 @@ export function CatalogView() {
     try {
       const idCanalVenta = getCanalMostrador()
 
-      // 1. Abrimos la orden
-      const venta = await abrirOrden({ idCanalVenta })
+      const venta = await abrirOrden({
+        idCanalVenta,
+        aliasCliente: aliasCliente.trim() || undefined,
+        notas: notas.trim() || undefined,
+      })
 
-      // 2. Agregamos los productos
       await agregarProductos(venta.id, {
         productos: buildProductosPayload(pendingItems),
       })
 
-      // 3. Enviamos a cocina los que lo requieran
       const ventaFinal = await enviarACocina(venta.id)
 
       setCurrentVenta(ventaFinal)
-
-      // Marcamos como enviados en el carrito
       setCartItems(prev => prev.map(i => ({ ...i, enviadoACocina: true })))
 
-      // Agregamos al resumen de órdenes abiertas (dropdown)
       setOpenOrders(prev => [...prev, {
         id: ventaFinal.id,
-        label: `#${ventaFinal.id}`,
+        label: `#${ventaFinal.numeroOrden}`,
         total: Number(ventaFinal.total),
         createdAt: ventaFinal.fechaApertura,
       }])
@@ -336,18 +363,19 @@ export function CatalogView() {
     if (!currentVenta || pendingItems.length === 0) return
     setSubmitting(true)
     try {
-      // 1. Agregar productos
       await agregarProductos(currentVenta.id, {
         productos: buildProductosPayload(pendingItems),
       })
 
-      // 2. Enviar a cocina
       const ventaFinal = await enviarACocina(currentVenta.id)
       setCurrentVenta(ventaFinal)
 
+      // Sync alias y notas desde la venta actualizada
+      setAliasCliente(ventaFinal.aliasCliente ?? "")
+      setNotas(ventaFinal.notas ?? "")
+
       setCartItems(prev => prev.map(i => ({ ...i, enviadoACocina: true })))
 
-      // Actualizar total en el dropdown
       setOpenOrders(prev => prev.map(o =>
         o.id === ventaFinal.id
           ? { ...o, total: Number(ventaFinal.total) }
@@ -370,6 +398,8 @@ export function CatalogView() {
       await cerrarOrden(currentVenta.id, { idMetodoPago })
       setCartItems([])
       setCurrentVenta(null)
+      setAliasCliente("")
+      setNotas("")
       setOpenOrders(prev => prev.filter(o => o.id !== currentVenta.id))
       toast.success(`Orden #${currentVenta.numeroOrden} cerrada y cobrada`)
     } catch (err: any) {
@@ -380,11 +410,34 @@ export function CatalogView() {
     }
   }
 
+  // ── Cancelación total de la orden activa ──────────────────────────────────
+  const handleCancelarOrden = async (motivo: string) => {
+    if (!currentVenta) return
+    setCancelling(true)
+    try {
+      await cancelarVenta(currentVenta.id, { motivo: motivo.trim() || undefined })
+      // Limpiar igual que handleNewSale
+      setCartItems([])
+      setCurrentVenta(null)
+      setAliasCliente("")
+      setNotas("")
+      setOpenOrders(prev => prev.filter(o => o.id !== currentVenta.id))
+      setIsCancelOpen(false)
+      toast.success(`Orden #${currentVenta.numeroOrden} cancelada`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Error al cancelar la orden")
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   // ── Cargar orden abierta desde dropdown ───────────────────────────────────
   const handleLoadOrder = async (ventaId: number) => {
     try {
       const venta = await getVenta(ventaId)
       setCurrentVenta(venta)
+      setAliasCliente(venta.aliasCliente ?? "")
+      setNotas(venta.notas ?? "")
       const items: CartItem[] = venta.detalleventa.map(d => ({
         id: d.idProducto,
         name: d.producto?.nombre ?? `Producto #${d.idProducto}`,
@@ -404,14 +457,14 @@ export function CatalogView() {
   const handleNewSale = () => {
     setCartItems([])
     setCurrentVenta(null)
+    setAliasCliente("")
+    setNotas("")
   }
 
-  // ── Seleccionar categoría con toggle ──────────────────────────────────────
   const handleCategorySelect = (categoryId: number) => {
     setSelectedCategoryId(prev => prev === categoryId ? null : categoryId)
   }
 
-  // ── Dispatch de pago según flujo ──────────────────────────────────────────
   const handleConfirmPayment = async (idMetodoPago: number) => {
     if (saleFlow === "flujo1") {
       await handleConfirmPaymentFlujo1(idMetodoPago)
@@ -420,7 +473,6 @@ export function CatalogView() {
     }
   }
 
-  // ── Filtrado ──────────────────────────────────────────────────────────────
   const filteredProducts = productos.filter(p => {
     const matchesSearch = p.nombre.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = !selectedCategoryId || p.idCategoria === selectedCategoryId
@@ -429,7 +481,6 @@ export function CatalogView() {
 
   const subtotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
-  // ── Render ────────────────────────────────────────────────────────────────
   if (loadingData) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -458,7 +509,7 @@ export function CatalogView() {
           </Button>
         </div>
 
-        {/* Selector de flujo */}
+        {/* Selector de flujo + cancelar orden activa */}
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Tabs defaultValue={saleFlow} onValueChange={value => setSaleFlow(value as SaleFlow)}>
@@ -479,9 +530,20 @@ export function CatalogView() {
             )}
           </div>
 
-
-          {/* Vista */}
           <div className="flex items-center gap-4">
+            {/* Botón cancelar orden activa — solo en flujo2 con orden abierta */}
+            {saleFlow === "flujo2" && currentVenta && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                onClick={() => setIsCancelOpen(true)}
+                disabled={submitting}
+              >
+                Cancelar orden
+              </Button>
+            )}
+
             <div className={cn(
               "flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-medium",
               connected
@@ -584,6 +646,10 @@ export function CatalogView() {
         openOrders={openOrders}
         onLoadOrder={handleLoadOrder}
         submitting={submitting}
+        aliasCliente={aliasCliente}
+        notas={notas}
+        onAliasChange={setAliasCliente}
+        onNotasChange={setNotas}
       />
 
       {/* Modal de pago */}
@@ -595,6 +661,24 @@ export function CatalogView() {
         onConfirmPayment={handleConfirmPayment}
         isClosingOrder={saleFlow === "flujo2" && currentVenta !== null}
       />
+
+      {/* Modal cancelar orden activa */}
+      {currentVenta && (
+        <CancelModal
+          open={isCancelOpen}
+          onOpenChange={setIsCancelOpen}
+          title={`Cancelar orden #${currentVenta.numeroOrden}`}
+          description={
+            !esVentaDeHoy(currentVenta)
+              ? "Solo se pueden cancelar ventas del día actual."
+              : "Esta acción cancelará todos los productos de la orden. Si ya fue cobrada, se registrará como reembolso. El motivo es obligatorio."
+          }
+          motivoRequerido={esVentaDeHoy(currentVenta)}
+          onConfirm={handleCancelarOrden}
+          loading={cancelling}
+          disabled={!esVentaDeHoy(currentVenta)}
+        />
+      )}
     </div>
   )
 }
