@@ -16,7 +16,7 @@ interface ListVentasParams {
   idEstatusOrden?: number;
   desde?: string;
   hasta?: string;
-  excludesPagadasCanceladas?: boolean;
+  excluirPagadasCanceladas?: boolean;
   paginacion?: boolean;
   pagina?: number;
   por_pagina?: number;
