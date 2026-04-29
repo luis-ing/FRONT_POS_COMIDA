@@ -375,3 +375,11 @@ export interface OpenOrderSummary {
   total: number;
   createdAt: string;
 }
+
+export interface VentaPaginatedResponse {
+  data: VentaResponse[];
+  total: number;
+  pagina: number;
+  por_pagina: number;
+  total_paginas: number;
+}

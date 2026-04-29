@@ -81,12 +81,51 @@ No typecheck or test scripts exist.
 ### Modified Files
 | File | Changes |
 |------|---------|
-| `types/schemas.ts` | Added `DetalleVentaCancelacionInfo` interface; updated `DetalleVentaResponse` with optional `cancelado` field; added `usuarioNombre` to `DetalleVentaCancelacionResponse` |
-| `lib/venta-utils.ts` | Added cancellation utilities: `estaDetalleCancelado`, `getCanceladoInfo`, `dentroDelLimiteCancelacion`, `mensajeLimiteCancelacion`, `esVentaDeHoy`, `admiteCancelacionParcial` |
+| `types/schemas.ts` | Added `DetalleVentaCancelacionInfo` interface; updated `DetalleVentaResponse` with optional `cancelado` field; added `usuarioNombre` to `DetalleVentaCancelacionResponse`; centralized `CartItem`, `SaleFlow`, `OrderStatus`, `OpenOrderSummary` interfaces |
+| `lib/venta-utils.ts` | Added cancellation utilities: `estaDetalleCancelado`, `getCanceladoInfo`, `dentroDelLimiteCancelacion` (1 week), `mensajeLimiteCancelacion`, `dentroDelLimiteCancelacionTotal` (2 weeks), `mensajeLimiteCancelacionTotal`, `esVentaDeHoy`, `admiteCancelacionParcial` |
 | `components/kitchen/kitchen-view.tsx` | Renders canceled items with strikethrough and cancellation info |
-| `components/catalog/cart-panel.tsx` | Renders canceled cart items with opacity/border styling and cancellation info |
+| `components/catalog/cart-panel.tsx` | Renders canceled cart items (sent & pending) with opacity/border styling and cancellation info; uses centralized `CartItem` type |
 | `components/catalog/cancel-modal.tsx` | Added `disabled` prop to disable fields/buttons for non-cancelable orders |
-| `components/catalog/catalog-view.tsx` | Enforced mandatory cancellation reason; added current-day sales validation for total cancellation |
-| `components/orders/open-orders-view.tsx` | Displays partial cancellation info in order detail modal; fixed missing `mensajeLimiteCancelacion` import |
-| `components/orders/orders-view.tsx` | Updated `esCancelable` to disable "Cancelar orden" for already-canceled orders; displays partial cancellation info in detail modal |
+| `components/catalog/catalog-view.tsx` | Enforced mandatory cancellation reason; added validation for total cancellation (2 weeks); centralized types to schemas.ts; maps `cancelado` and `canceladoInfo` when loading orders |
+| `components/orders/open-orders-view.tsx` | Displays partial cancellation info in order detail modal; fixed missing imports; updated to use `dentroDelLimiteCancelacionTotal()` and `mensajeLimiteCancelacionTotal()`; changed indicator from "+2h" to "+7d" |
+| `components/orders/orders-view.tsx` | Updated `esCancelable` to disable "Cancelar orden" for already-canceled orders (checks payment status `CANCELADA` and order status `cancelada`); displays partial cancellation info in detail modal; updated to use `dentroDelLimiteCancelacionTotal()` and `mensajeLimiteCancelacionTotal()`; changed indicator from "+2h" to "+7d" |
 | Backend `services/venta_service.py` | Updated `_venta_to_socket_dict()` to send `cancelado` as object with cancellation metadata |
+
+### Time Limit Changes (Updated)
+| Cancellation Type | Previous Limit | New Limit | Function |
+|-------------------|---------------|-----------|----------|
+| Total | Same day (`esVentaDeHoy`) | 2 weeks | `dentroDelLimiteCancelacionTotal()` |
+| Partial | 2 hours | 1 week (7 days) | `dentroDelLimiteCancelacion()` |
+
+### Type Migration to schemas.ts
+Moved from `catalog-view.tsx` to `types/schemas.ts`:
+- `CartItem` interface (with `cancelado` and `canceladoInfo` fields)
+- `SaleFlow` type
+- `OrderStatus` type  
+- `OpenOrderSummary` interface
+
+Both `catalog-view.tsx` and `cart-panel.tsx` now import these types from `@/types/schemas`.
+
+## OrdersView Improvements
+
+### Pagination & Sorting
+- **Backend**: Supports `ordenar_por` and `orden` parameters for sorting columns (`id`, `fechaCreacion`, `fechaApertura`, `fechaCierre`, `total`, `numeroOrden`, `aliasCliente`, `idEstatusOrden`, `idEstatusPago`)
+- **Frontend**: Shows pagination always (not just when `totalPaginas > 1`)
+- **Sorting**: Clickable column headers with ↑/↓ indicators; sorts by column when clicked, toggles asc/desc
+- **UI**: "Anterior" and "Siguiente" buttons always visible (disabled when not applicable)
+
+### Date Filters
+- **Default dates**: Both "Desde" and "Hasta" default to today's date
+- **Labels**: Added visible labels "Desde" and "Hasta" above date inputs
+- **Max restriction**: Date inputs restricted to today (via `max` attribute)
+- **Removed**: "Hoy/Todas" toggle button
+
+### Column Changes
+- **Column "Hora" → "Fecha"**: Now shows full date + time in AM/PM format (e.g., "29/04/26 10:30 AM")
+- **Format**: Uses `getFechaHora()` function with locale "es-MX"
+
+### Modified Files (OrdersView)
+| File | Changes |
+|------|---------|
+| `services/venta_service.ts` | Added `ordenar_por` and `orden` to `ListVentasParams` |
+| `components/orders/orders-view.tsx` | Added sorting states (`sortBy`, `sortOrder`); updated `fetchVentas()` to send sorting params; added `renderSortableHeader()` function; made table headers clickable; pagination always visible; updated date format to "DD/MM/YY HH:MM AM/PM"; added labels to date inputs; removed "Hoy/Todas" button |

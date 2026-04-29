@@ -5,6 +5,7 @@ import { Search, Calendar, MoreHorizontal, Eye, Loader2, XCircle, Trash2 } from 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -22,7 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-import { getVentas, getVenta, cancelarVenta, cancelarProducto } from "@/services/venta_service"
+import { getVentasPaginadas, getVenta, cancelarVenta, cancelarProducto } from "@/services/venta_service"
 import { getEstatusOrden, getEstatusPago, getCanalesVenta } from "@/services/catalogo_service"
 import { CancelModal } from "../catalog/cancel-modal"
 import {
@@ -62,9 +63,24 @@ export function OrdersView() {
   const [detailLoading,  setDetailLoading]  = useState(false)
 
   // ── Filtros ───────────────────────────────────────────────────────────────
-  const [searchQuery,  setSearchQuery]  = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [soloHoy,      setSoloHoy]      = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  // Filtros con fecha por defecto (hoy)
+  const today = new Date().toISOString().split("T")[0]
+  const [fechaDesde, setFechaDesde] = useState(today)
+  const [fechaHasta, setFechaHasta] = useState(today)
+  const [filtroEstatusOrden, setFiltroEstatusOrden] = useState("all")
+  const [filtroEstatusPago, setFiltroEstatusPago] = useState("all")
+
+  // Paginación
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [porPagina, setPorPagina] = useState(20)
+  const [totalVentas, setTotalVentas] = useState(0)
+  const [totalPaginas, setTotalPaginas] = useState(1)
+
+  // Ordenamiento
+  const [sortBy, setSortBy] = useState<string>("fechaCreacion")
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   // ── Cancelación total ─────────────────────────────────────────────────────
   const [isCancelTotalOpen,  setIsCancelTotalOpen]  = useState(false)
@@ -88,24 +104,43 @@ export function OrdersView() {
       .catch(() => toast.error("Error al cargar catálogos"))
   }, [])
 
-  // ── Carga de ventas ───────────────────────────────────────────────────────
+// ── Carga de ventas ───────────────────────────────────────────────────────
   const fetchVentas = useCallback(async () => {
     setLoading(true)
     try {
-      const hoy   = new Date()
-      const desde = soloHoy
-        ? new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString()
-        : undefined
-      const data = await getVentas({ desde })
-      setVentas(data)
+      const params: any = {
+        paginacion: true,
+        pagina: paginaActual,
+        por_pagina: porPagina,
+      }
+
+      if (fechaDesde) params.desde = new Date(fechaDesde).toISOString()
+      if (fechaHasta) params.hasta = new Date(fechaHasta + "T23:59:59").toISOString()
+      if (filtroEstatusOrden !== "all") params.idEstatusOrden = parseInt(filtroEstatusOrden)
+      if (filtroEstatusPago !== "all") params.idEstatusPago = parseInt(filtroEstatusPago)
+      if (searchQuery) params.busqueda = searchQuery
+      if (sortBy) {
+        params.ordenar_por = sortBy
+        params.orden = sortOrder
+      }
+
+      const response = await getVentasPaginadas(params)
+      setVentas(response.data)
+      setTotalVentas(response.total)
+      setTotalPaginas(response.total_paginas)
     } catch {
       toast.error("Error al cargar ventas")
     } finally {
       setLoading(false)
     }
-  }, [soloHoy])
+  }, [paginaActual, porPagina, fechaDesde, fechaHasta, filtroEstatusOrden, filtroEstatusPago, searchQuery, sortBy, sortOrder])
 
   useEffect(() => { fetchVentas() }, [fetchVentas])
+
+  // Reiniciar página cuando cambian los filtros u ordenamiento
+  useEffect(() => {
+    setPaginaActual(1)
+  }, [fechaDesde, fechaHasta, filtroEstatusOrden, filtroEstatusPago, searchQuery, sortBy, sortOrder])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const getNombreEstatus = (id: number) =>
@@ -117,13 +152,41 @@ export function OrdersView() {
   const getNombreCanal = (id: number) =>
     canales.find(c => c.id === id)?.canal ?? String(id)
 
-  const getHora = (iso: string) =>
-    new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
-
-  const getFecha = (iso: string) =>
-    new Date(iso).toLocaleDateString("es-MX", {
-      day: "2-digit", month: "2-digit", year: "numeric",
+  const getFechaHora = (iso: string) => {
+    const fecha = new Date(iso)
+    const fechaStr = fecha.toLocaleDateString("es-MX", { 
+      day: "2-digit", month: "2-digit", year: "2-digit" 
     })
+    const horaStr = fecha.toLocaleTimeString("es-MX", { 
+      hour: "2-digit", minute: "2-digit", hour12: true 
+    })
+    return `${fechaStr} ${horaStr}`
+  }
+
+  // Función helper para headers ordenables
+  const renderSortableHeader = (label: string, column: string) => (
+    <TableHead 
+      className="sticky top-0 bg-card z-20 font-semibold cursor-pointer hover:bg-muted/50"
+      onClick={() => {
+        if (sortBy === column) {
+          setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+        } else {
+          setSortBy(column)
+          setSortOrder('asc')
+        }
+        setPaginaActual(1)
+      }}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortBy === column && (
+          <span className="text-xs">
+            {sortOrder === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </TableHead>
+  )
 
   // Una venta es cancelable si no está ya CANCELADA (por pago o estatus)
   const esCancelable = (venta: VentaResponse) => {
@@ -156,16 +219,8 @@ export function OrdersView() {
     setSelectedVenta(null)
   }
 
-  // ── Filtrado local ────────────────────────────────────────────────────────
-  const filtered = ventas.filter(v => {
-    const matchSearch =
-      String(v.numeroOrden).includes(searchQuery) ||
-      (v.aliasCliente ?? "").toLowerCase().includes(searchQuery.toLowerCase())
-    const matchStatus = statusFilter === "all" || v.idEstatusOrden === parseInt(statusFilter)
-    return matchSearch && matchStatus
-  })
-
-  const totalVentas = ventas.reduce((sum, v) => sum + Number(v.total), 0)
+  // ── Stats (total ya viene del backend) ────────────────────────────────────────
+  const totalMonto = ventas.reduce((sum, v) => sum + Number(v.total), 0)
 
   // ── Cancelación total ─────────────────────────────────────────────────────
   const openCancelTotal = (venta: VentaResponse, e?: React.MouseEvent) => {
@@ -233,7 +288,7 @@ export function OrdersView() {
       </div>
 
       {/* Filtros */}
-      <div className="mb-6 flex flex-wrap items-center gap-4">
+      <div className="mb-6 flex flex-wrap items-end gap-4">
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -244,9 +299,30 @@ export function OrdersView() {
           />
         </div>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-11 w-[200px] rounded-xl border-2">
-            <SelectValue placeholder="Estado" />
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground ml-1">Desde</Label>
+          <Input
+            type="date"
+            value={fechaDesde}
+            onChange={e => setFechaDesde(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+            className="h-11 w-[160px] rounded-xl border-2"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs text-muted-foreground ml-1">Hasta</Label>
+          <Input
+            type="date"
+            value={fechaHasta}
+            onChange={e => setFechaHasta(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+            className="h-11 w-[160px] rounded-xl border-2"
+          />
+        </div>
+
+        <Select value={filtroEstatusOrden} onValueChange={setFiltroEstatusOrden}>
+          <SelectTrigger className="h-11 w-[180px] rounded-xl border-2">
+            <SelectValue placeholder="Estado orden" />
           </SelectTrigger>
           <SelectContent className="rounded-xl">
             <SelectItem value="all">Todos los estados</SelectItem>
@@ -256,23 +332,26 @@ export function OrdersView() {
           </SelectContent>
         </Select>
 
-        <Button
-          variant={soloHoy ? "default" : "outline"}
-          className="h-11 rounded-xl border-2 gap-2"
-          onClick={() => setSoloHoy(v => !v)}
-        >
-          <Calendar className="h-4 w-4" />
-          {soloHoy ? "Hoy" : "Todas"}
-        </Button>
+        <Select value={filtroEstatusPago} onValueChange={setFiltroEstatusPago}>
+          <SelectTrigger className="h-11 w-[160px] rounded-xl border-2">
+            <SelectValue placeholder="Pago" />
+          </SelectTrigger>
+          <SelectContent className="rounded-xl">
+            <SelectItem value="all">Todos</SelectItem>
+            {estatusPagos.map(e => (
+              <SelectItem key={e.id} value={String(e.id)}>{e.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Total órdenes",  value: ventas.length,                                                                           color: "text-foreground" },
+          { label: "Total órdenes",  value: totalVentas,                                                                           color: "text-foreground" },
           { label: "Pendientes",     value: ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "pendiente").length,           color: "text-primary" },
           { label: "En preparación", value: ventas.filter(v => getNombreEstatus(v.idEstatusOrden) === "en_preparacion").length,      color: "text-foreground" },
-          { label: "Ventas del día", value: `$${totalVentas.toFixed(2)}`,                                                            color: "text-foreground" },
+          { label: "Ventas del período", value: `$${totalMonto.toFixed(2)}`,                                                            color: "text-foreground" },
         ].map(s => (
           <div key={s.label} className="rounded-2xl border-2 border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">{s.label}</p>
@@ -292,19 +371,19 @@ export function OrdersView() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b-2 border-border hover:bg-transparent">
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Orden</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Cliente</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Canal</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Items</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Total</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Estado</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Pago</TableHead>
-                  <TableHead className="sticky top-0 bg-card z-20 font-semibold">Hora</TableHead>
+                  {renderSortableHeader("Orden", "numeroOrden")}
+                  {renderSortableHeader("Cliente", "aliasCliente")}
+                  {renderSortableHeader("Canal", "idCanalVenta")}
+                  {renderSortableHeader("Items", "id")}
+                  {renderSortableHeader("Total", "total")}
+                  {renderSortableHeader("Estado", "idEstatusOrden")}
+                  {renderSortableHeader("Pago", "idEstatusPago")}
+                  {renderSortableHeader("Fecha", "fechaApertura")}
                   <TableHead className="sticky top-0 bg-card z-20 w-[50px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(venta => {
+                {ventas.map(venta => {
                   const nombreEstatus  = getNombreEstatus(venta.idEstatusOrden)
                   const nombrePago     = getNombrePagoById(venta.idEstatusPago)
                   const esCancelada    = nombrePago === "CANCELADA"
@@ -346,7 +425,7 @@ export function OrdersView() {
                           {nombrePago}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{getHora(venta.fechaApertura)}</TableCell>
+                      <TableCell className="text-muted-foreground">{getFechaHora(venta.fechaApertura)}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -381,7 +460,7 @@ export function OrdersView() {
                     </TableRow>
                   )
                 })}
-                {filtered.length === 0 && (
+                {ventas.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                       No se encontraron órdenes
@@ -392,6 +471,46 @@ export function OrdersView() {
             </Table>
           </div>
         )}
+        
+        {/* Paginación */}
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Mostrar</span>
+            <Select value={String(porPagina)} onValueChange={v => setPorPagina(Number(v))}>
+              <SelectTrigger className="h-9 w-[80px] rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-lg">
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">registros de {totalVentas}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Página {paginaActual} de {Math.max(1, totalPaginas)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+              disabled={paginaActual <= 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+              disabled={paginaActual >= totalPaginas || totalPaginas === 0}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* ── Modal de detalle con cancelación parcial ────────────────────────── */}
@@ -422,10 +541,8 @@ export function OrdersView() {
             <div className="space-y-6">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border-2 border-border bg-muted/50 p-4">
-                  <p className="text-sm text-muted-foreground">Fecha</p>
-                  <p className="font-medium">{getFecha(selectedVenta.fechaApertura)}</p>
-                  <p className="text-sm text-muted-foreground">Hora</p>
-                  <p className="font-medium">{getHora(selectedVenta.fechaApertura)}</p>
+                  <p className="text-sm text-muted-foreground">Fecha y hora</p>
+                  <p className="font-medium">{getFechaHora(selectedVenta.fechaApertura)}</p>
                 </div>
                 <div className="rounded-2xl border-2 border-border bg-muted/50 p-4">
                   <p className="text-sm text-muted-foreground">Canal</p>

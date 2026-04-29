@@ -8,23 +8,40 @@ import type {
   VentaResponse,
   CancelarVentaInput,
   CancelarProductoInput,
+  VentaPaginatedResponse,
 } from "@/types/schemas";
 
 interface ListVentasParams {
   idEstatusPago?: number;
   idEstatusOrden?: number;
-  desde?: string; // ISO 8601
-  hasta?: string; // ISO 8601
-  excluirPagadasCanceladas?: boolean; // Si true, excluye ventas con estatus de pago "pagada" o "cancelada"
+  desde?: string;
+  hasta?: string;
+  excludesPagadasCanceladas?: boolean;
+  paginacion?: boolean;
+  pagina?: number;
+  por_pagina?: number;
+  busqueda?: string;
+  ordenar_por?: string;
+  orden?: 'asc' | 'desc';
 }
 
 // ─── Consultas ────────────────────────────────────────────────────────────────
 
-/** GET /ventas */
+/** GET /ventas (sin paginación, compatibilidad hacia atrás) */
 export async function getVentas(
   params?: ListVentasParams
 ): Promise<VentaResponse[]> {
   const res = await api.get<VentaResponse[]>("/ventas", { params });
+  return res.data;
+}
+
+/** GET /ventas con paginación */
+export async function getVentasPaginadas(
+  params?: ListVentasParams
+): Promise<VentaPaginatedResponse> {
+  const res = await api.get<VentaPaginatedResponse>("/ventas", {
+    params: { ...params, paginacion: true },
+  });
   return res.data;
 }
 
