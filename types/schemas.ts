@@ -350,3 +350,28 @@ export interface EstatusPagoResponse {
   nombre: string;
   descripcion: string | null;
 }
+
+// ─── Cart / Catálogo ───────────────────────────────────────────────────────
+
+export interface CartItem {
+  id: number;
+  name: string;
+  price: number;
+  quantity: number;
+  enviadoACocina: boolean;
+  requiereCoccion: boolean;
+  // Información de cancelación
+  cancelado?: boolean;
+  canceladoInfo?: DetalleVentaCancelacionInfo | null;
+}
+
+export type SaleFlow = "flujo1" | "flujo2";
+
+export type OrderStatus = "ABIERTA" | "CERRADA";
+
+export interface OpenOrderSummary {
+  id: number;
+  label: string;
+  total: number;
+  createdAt: string;
+}

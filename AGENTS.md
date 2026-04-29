@@ -54,18 +54,19 @@ No typecheck or test scripts exist.
 - Canceled order items are never removed from views: they remain visible with muted styling.
 
 ### Total Cancellation
-- **Eligibility**: Only allowed for sales created on the current day (validated frontend via `esVentaDeHoy()` in `lib/venta-utils.ts`, backend enforces same rule).
+- **Eligibility**: Only allowed for sales created within the last 2 weeks (validated frontend via `dentroDelLimiteCancelacionTotal()` in `lib/venta-utils.ts`, backend enforces same rule).
 - **UI Behavior**:
   - "Cancelar orden" buttons are hidden/disabled for already canceled orders (checks both payment status `CANCELADA` and order status `cancelada`).
   - Uses `CancelModal` with `motivoRequerido={true}` and `disabled` prop to lock fields for non-eligible orders.
+  - Time limit message shown via `mensajeLimiteCancelacionTotal()`.
 
 ### Partial Cancellation
 - **Eligibility**:
   - Only allowed for orders with payment status `ABIERTA`.
-  - Only allowed within 2 hours of the order's opening time (validated via `dentroDelLimiteCancelacion()` in `lib/venta-utils.ts`).
+  - Only allowed within 1 week (7 days) of the order's opening time (validated via `dentroDelLimiteCancelacion()` in `lib/venta-utils.ts`).
 - **UI Behavior**:
   - Canceled items retain `opacity-60` styling with `line-through` and `text-destructive/70` (KitchenView), or `opacity-60 border-destructive/30` (CartPanel).
-  - Per-item cancel buttons are disabled outside the 2-hour window, with tooltip showing the limit message via `mensajeLimiteCancelacion()`.
+  - Per-item cancel buttons are disabled outside the 1-week window, with tooltip showing the limit message via `mensajeLimiteCancelacion()` and "+7d" indicator.
 - **Data Formats**: Frontend handles two cancellation data formats:
   - Socket payload (`orden_actualizada` event): `cancelado` field is an object `{ fechaCancelacion: string, motivo?: string, usuarioNombre?: string }` (matches `DetalleVentaCancelacionInfo` interface).
   - API GET payload: `cancelacion` field is an array of `DetalleVentaCancelacionResponse` (uses first array element for display).

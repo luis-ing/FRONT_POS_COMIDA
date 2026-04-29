@@ -42,29 +42,8 @@ import {
   onOrdenCancelada,
   offOrdenCancelada,
 } from "@/services/socket_client"
-import { esVentaDeHoy } from "@/lib/venta-utils"
-import type { ProductoResponse, CategoriaResponse, CanalVentaResponse, VentaResponse } from "@/types/schemas"
-
-// ─── Tipos locales ────────────────────────────────────────────────────────────
-
-export interface CartItem {
-  id: number
-  name: string
-  price: number
-  quantity: number
-  enviadoACocina: boolean
-  requiereCoccion: boolean
-}
-
-export type SaleFlow = "flujo1" | "flujo2"
-export type OrderStatus = "ABIERTA" | "CERRADA"
-
-export interface OpenOrderSummary {
-  id: number
-  label: string
-  total: number
-  createdAt: string
-}
+import { dentroDelLimiteCancelacionTotal, mensajeLimiteCancelacionTotal, estaDetalleCancelado, getCanceladoInfo } from "@/lib/venta-utils"
+import type { ProductoResponse, CategoriaResponse, CanalVentaResponse, VentaResponse, CartItem, SaleFlow, OpenOrderSummary } from "@/types/schemas"
 
 const CANAL_MOSTRADOR_NOMBRE = "Mostrador"
 
@@ -142,6 +121,8 @@ export function CatalogView() {
           quantity: d.cantidad,
           enviadoACocina: d.enviadoACocina,
           requiereCoccion: d.producto?.requiereCoccion ?? true,
+          cancelado: estaDetalleCancelado(d),
+          canceladoInfo: getCanceladoInfo(d),
         }))
         setCartItems(items)
         toast.info(`Orden #${venta.id} cargada`)
@@ -445,6 +426,8 @@ export function CatalogView() {
         quantity: d.cantidad,
         enviadoACocina: d.enviadoACocina,
         requiereCoccion: d.producto?.requiereCoccion ?? true,
+        cancelado: estaDetalleCancelado(d),
+        canceladoInfo: getCanceladoInfo(d),
       }))
       setCartItems(items)
       setSaleFlow("flujo2")
@@ -669,14 +652,14 @@ export function CatalogView() {
           onOpenChange={setIsCancelOpen}
           title={`Cancelar orden #${currentVenta.numeroOrden}`}
           description={
-            !esVentaDeHoy(currentVenta)
-              ? "Solo se pueden cancelar ventas del día actual."
-              : "Esta acción cancelará todos los productos de la orden. Si ya fue cobrada, se registrará como reembolso. El motivo es obligatorio."
+            !dentroDelLimiteCancelacionTotal(currentVenta)
+              ? mensajeLimiteCancelacionTotal()
+              : "Se cancelará la orden completa. El motivo es obligatorio."
           }
-          motivoRequerido={esVentaDeHoy(currentVenta)}
+          motivoRequerido={dentroDelLimiteCancelacionTotal(currentVenta)}
           onConfirm={handleCancelarOrden}
           loading={cancelling}
-          disabled={!esVentaDeHoy(currentVenta)}
+          disabled={!dentroDelLimiteCancelacionTotal(currentVenta)}
         />
       )}
     </div>

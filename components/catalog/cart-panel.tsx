@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useEffect, useRef } from "react"
-import { estaDetalleCancelado, getCanceladoInfo } from "@/lib/venta-utils"
-import type { CartItem, SaleFlow, OpenOrderSummary } from "./catalog-view"
+import type { CartItem, SaleFlow, OpenOrderSummary } from "@/types/schemas"
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -217,46 +216,43 @@ export function CartPanel({
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Check className="h-4 w-4 text-primary" /> Enviado a cocina
                 </div>
-                {sentItems.map((item, idx) => {
-                  const cancelado = estaDetalleCancelado(item);
-                  const info = getCanceladoInfo(item);
-                  return (
+                {sentItems.map((item, idx) => (
                   <div
                     key={`sent-${item.id}-${idx}`}
                     className={cn(
                       "flex items-start justify-between rounded-xl border-2 p-3",
-                      cancelado
+                      item.cancelado
                         ? "opacity-60 border-destructive/30 bg-destructive/5"
                         : "opacity-70"
                     )}
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className={cn("font-medium", cancelado && "line-through text-destructive/70")}>
+                        <p className={cn("font-medium", item.cancelado && "line-through text-destructive/70")}>
                           {item.name}
                         </p>
                         {item.requiereCoccion && <ChefHat className="h-4 w-4 text-orange-500" />}
                       </div>
-                      <span className={cn("mt-1 block text-sm text-muted-foreground", cancelado && "line-through text-destructive/70")}>
+                      <span className={cn("mt-1 block text-sm text-muted-foreground", item.cancelado && "line-through text-destructive/70")}>
                         x{item.quantity}
                       </span>
-                      {cancelado && info && (
+                      {item.cancelado && item.canceladoInfo && (
                         <p className="text-xs text-destructive/80 mt-0.5 leading-tight">
                           <span className="font-medium">Cancelado</span>
-                          {info.usuarioNombre && (
-                            <span className="font-normal"> por {info.usuarioNombre}</span>
+                          {item.canceladoInfo.usuarioNombre && (
+                            <span className="font-normal"> por {item.canceladoInfo.usuarioNombre}</span>
                           )}
-                          {info.motivo && (
-                            <span className="italic"> - {info.motivo}</span>
+                          {item.canceladoInfo.motivo && (
+                            <span className="italic"> - {item.canceladoInfo.motivo}</span>
                           )}
                         </p>
                       )}
                     </div>
-                    <p className={cn("font-semibold", cancelado ? "line-through text-destructive/70" : "text-muted-foreground")}>
+                    <p className={cn("font-semibold", item.cancelado ? "line-through text-destructive/70" : "text-muted-foreground")}>
                       ${(item.price * item.quantity).toFixed(2)}
                     </p>
                   </div>
-                )})}
+                ))}
               </div>
             )}
 
@@ -273,12 +269,13 @@ export function CartPanel({
                     key={`pending-${item.id}-${idx}`}
                     className={cn(
                       "flex items-start justify-between rounded-xl border-2 p-3",
-                      item.requiereCoccion ? "border-orange-500/30 bg-orange-500/5" : "border-border"
+                      item.requiereCoccion ? "border-orange-500/30 bg-orange-500/5" : "border-border",
+                      item.cancelado && "opacity-60 border-destructive/30 bg-destructive/5"
                     )}
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground">{item.name}</p>
+                        <p className={cn("font-medium", item.cancelado ? "line-through text-destructive/70" : "text-foreground")}>{item.name}</p>
                         {item.requiereCoccion && <ChefHat className="h-4 w-4 text-orange-500" />}
                       </div>
                       <div className="mt-2 flex items-center gap-2">
@@ -287,23 +284,34 @@ export function CartPanel({
                           size="icon"
                           className="h-7 w-7 rounded-lg border-2"
                           onClick={() => onUpdateQuantity(item.id, item.quantity - 1, false)}
-                          disabled={submitting}
+                          disabled={submitting || !!item.cancelado}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <span className={cn("w-8 text-center font-medium", item.cancelado && "line-through text-destructive/70")}>{item.quantity}</span>
                         <Button
                           variant="outline"
                           size="icon"
                           className="h-7 w-7 rounded-lg border-2"
                           onClick={() => onUpdateQuantity(item.id, item.quantity + 1, false)}
-                          disabled={submitting}
+                          disabled={submitting || !!item.cancelado}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
+                      {item.cancelado && item.canceladoInfo && (
+                        <p className="text-xs text-destructive/80 mt-0.5 leading-tight">
+                          <span className="font-medium">Cancelado</span>
+                          {item.canceladoInfo.usuarioNombre && (
+                            <span className="font-normal"> por {item.canceladoInfo.usuarioNombre}</span>
+                          )}
+                          {item.canceladoInfo.motivo && (
+                            <span className="italic"> - {item.canceladoInfo.motivo}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                    <p className="font-semibold text-foreground">
+                    <p className={cn("font-semibold", item.cancelado ? "line-through text-destructive/70" : "text-foreground")}>
                       ${(item.price * item.quantity).toFixed(2)}
                     </p>
                   </div>

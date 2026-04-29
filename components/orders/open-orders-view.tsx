@@ -34,6 +34,8 @@ import {
   estaDetalleCancelado,
   dentroDelLimiteCancelacion,
   esVentaDeHoy,
+  dentroDelLimiteCancelacionTotal,
+  mensajeLimiteCancelacionTotal,
   getCanceladoInfo,
   mensajeLimiteCancelacion,
 } from "@/lib/venta-utils"
@@ -339,13 +341,13 @@ export function OpenOrdersView() {
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => openCancelTotal(venta)}
-                            disabled={!esVentaDeHoy(venta)}
+                            disabled={!dentroDelLimiteCancelacionTotal(venta)}
                           >
                             <XCircle className="mr-2 h-4 w-4" /> Cancelar orden
                           </DropdownMenuItem>
-                          {!esVentaDeHoy(venta) && (
+                          {!dentroDelLimiteCancelacionTotal(venta) && (
                             <p className="px-2 py-1 text-xs text-muted-foreground">
-                              Solo ventas del día actual
+                              {mensajeLimiteCancelacionTotal()}
                             </p>
                           )}
                         </DropdownMenuContent>
@@ -441,7 +443,7 @@ export function OpenOrdersView() {
                       <p className="font-medium">Productos ({selectedVenta.detalleventa.length})</p>
                       {esAbierta && (
                         <p className="text-xs text-muted-foreground">
-                          {dentroLimite ? "× para cancelar un producto" : "Cancelación parcial no disponible (+2h)"}
+                          {dentroLimite ? "× para cancelar un producto" : "Cancelación parcial no disponible (+7d)"}
                         </p>
                       )}
                     </div>

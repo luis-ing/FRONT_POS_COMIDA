@@ -1,7 +1,10 @@
 import type { DetalleVentaResponse, VentaResponse, DetalleVentaCancelacionInfo } from "@/types/schemas"
 
-/** Horas máximas permitidas para cancelar un producto de una orden */
-export const LIMITE_HORAS_CANCELACION_PARCIAL = 2
+/** Semanas máximas permitidas para cancelar una orden completa */
+export const LIMITE_SEMANAS_CANCELACION_TOTAL = 2
+
+/** Días máximos permitidos para cancelar un producto de una orden (1 semana) */
+export const LIMITE_DIAS_CANCELACION_PARCIAL = 7
 
 /**
  * Devuelve true si el detalle tiene al menos un registro de cancelación.
@@ -47,10 +50,13 @@ export function minutosDesdeApertura(venta: VentaResponse): number {
 
 /**
  * Devuelve true si la venta está dentro del límite de tiempo permitido
- * para realizar cancelaciones parciales.
+ * para realizar cancelaciones parciales (1 semana).
  */
 export function dentroDelLimiteCancelacion(venta: VentaResponse): boolean {
-  return minutosDesdeApertura(venta) < LIMITE_HORAS_CANCELACION_PARCIAL * 60
+  const diasDesdeApertura = Math.floor(
+    (Date.now() - new Date(venta.fechaApertura).getTime()) / (1000 * 60 * 60 * 24)
+  )
+  return diasDesdeApertura < LIMITE_DIAS_CANCELACION_PARCIAL
 }
 
 /**
@@ -58,7 +64,25 @@ export function dentroDelLimiteCancelacion(venta: VentaResponse): boolean {
  * por tiempo.
  */
 export function mensajeLimiteCancelacion(): string {
-  return `Solo se pueden cancelar productos de órdenes con menos de ${LIMITE_HORAS_CANCELACION_PARCIAL} horas de antigüedad.`
+  return `Solo se pueden cancelar productos de órdenes con menos de ${LIMITE_DIAS_CANCELACION_PARCIAL} días (1 semana) de antigüedad.`
+}
+
+/**
+ * Devuelve true si la venta está dentro del límite de tiempo permitido
+ * para realizar cancelaciones totales (2 semanas).
+ */
+export function dentroDelLimiteCancelacionTotal(venta: VentaResponse): boolean {
+  const diasDesdeApertura = Math.floor(
+    (Date.now() - new Date(venta.fechaApertura).getTime()) / (1000 * 60 * 60 * 24)
+  )
+  return diasDesdeApertura < LIMITE_SEMANAS_CANCELACION_TOTAL * 7
+}
+
+/**
+ * Mensaje cuando la cancelación total no está disponible por tiempo.
+ */
+export function mensajeLimiteCancelacionTotal(): string {
+  return `Solo se pueden cancelar ventas con menos de ${LIMITE_SEMANAS_CANCELACION_TOTAL} semanas de antigüedad.`
 }
 
 /**
