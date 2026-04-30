@@ -487,9 +487,9 @@ export function CatalogView() {
               className="h-12 rounded-xl border-2 pl-12 text-base"
             />
           </div>
-          <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-2">
+          {/* <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-2">
             <SlidersHorizontal className="h-5 w-5" />
-          </Button>
+          </Button> */}
         </div>
 
         {/* Selector de flujo + cancelar orden activa */}
